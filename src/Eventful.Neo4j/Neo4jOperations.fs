@@ -268,7 +268,7 @@ module Operations =
     let emptyStatements = """ { "statements": [] } """
 
     let post uri body =
-        Http.Request(uri, headers = [ HttpRequestHeaders.ContentType HttpContentTypes.Json ], body = TextRequest body)
+        Http.AsyncRequest(uri, headers = [ HttpRequestHeaders.ContentType HttpContentTypes.Json ], body = TextRequest body)
 
     let parseResponse (response : HttpResponse) =
         match response.Body with
@@ -281,26 +281,52 @@ module Operations =
             failwith (sprintf "Got errors: %A" jsonResponse.Errors)
 
     let beginTransaction neo4jEndpoint =
-        let transactionEndpoint = neo4jEndpoint + "/transaction"
-        let response = post transactionEndpoint emptyStatements
-        response.Headers |> Map.find "Location"
+        async {
+            let transactionEndpoint = neo4jEndpoint + "/transaction"
+            let! response = post transactionEndpoint emptyStatements
+            return response.Headers |> Map.find "Location"
+        }
 
     let commitTransaction location =
-        log.Debug <| lazy "committing Neo4J transaction."
-        post (location + "/commit") emptyStatements |> checkForErrors
+        async {
+            log.Debug <| lazy "committing Neo4J transaction."
+            let! response = post (location + "/commit") emptyStatements
+            checkForErrors response
+        }
+
+    let keepAliveTransation location =
+        async {
+            log.Debug <| lazy "keep-alive Neo4J transaction."
+            let! response = post location emptyStatements
+            checkForErrors response
+        }
 
     let addStatementsToTransaction location (statements : CypherQuery seq) =
-        let statementsJson =
-            statements
-            |> Seq.map (fun query ->
-                let statement = query.Query.Query.QueryText |> JsonConvert.SerializeObject
-                let parameters = query.Query.Query.QueryParameters |> JsonConvert.SerializeObject
-                sprintf """{ "statement": %s, "parameters": %s }""" statement parameters)
-            |> String.concat ","
+        async {
+            let statementsJson =
+                statements
+                |> Seq.map (fun query ->
+                    let statement = query.Query.Query.QueryText |> JsonConvert.SerializeObject
+                    let parameters = query.Query.Query.QueryParameters |> JsonConvert.SerializeObject
+                    sprintf """{ "statement": %s, "parameters": %s }""" statement parameters)
+                |> String.concat ","
 
-        let body = """ { "statements": [ """ + statementsJson + " ] }"
+            let body = """ { "statements": [ """ + statementsJson + " ] }"
 
-        post location body |> checkForErrors
+            let! response = post location body
+            checkForErrors response
+        }
+
+    let rec retryForever description action =
+        async {
+            try
+                return! action
+            with
+            | exn ->
+                log.WarnWithException <| lazy (description + " failed, retrying...", exn)
+                do! Async.Sleep 500
+                return! retryForever description action
+        }
 
     type ITransactionBatcher =
         abstract Add :  string -> GraphTransaction seq -> Async<Choice<unit, exn>>
@@ -310,6 +336,7 @@ module Operations =
     type TransactionBatcherMessage<'a> =
         | Item of 'a
         | Finish of AsyncReplyChannel<unit>
+        | Timeout
 
     let createTransactionBatcher neo4jEndpoint (graphClient : ICypherGraphClient) =
         let queriesPerBatch = 1000
@@ -318,36 +345,51 @@ module Operations =
         let agent = Control.MailboxProcessor.Start(fun inbox ->
             let emptyState = (0, List.empty, 0, None)
 
-            let rec loop (queryCount, batch, batchCount, transaction) =
+            let rec loop ((queryCount, batch, batchCount, transaction) as state) =
                 async {
-                    let! message = inbox.Receive()
+                    let timeout = 20 * 1000 // 20 seconds. Neo4j's default transaction timeout is 60 seconds. We want to make sure we send keep-alives well before this.
+                    let! maybeMessage = inbox.TryReceive timeout
+                    let message = maybeMessage |> Option.getOrElse Timeout
 
-                    let newStateOrCompleteBatch =
-                        match message with
-                        | Item item ->
-                            let newBatch = item :: batch
-                            let newQueryCount = queryCount + 1
-                            if newQueryCount < queriesPerBatch then
-                                Choice1Of2 (newQueryCount, newBatch, batchCount, transaction)
-                            else
-                                Choice2Of2 (newBatch, None)
-                        | Finish replyChannel ->
-                            // No more queries
-                            Choice2Of2 (batch, Some replyChannel)
+                    let! newStateOrCompleteBatch =
+                        async {
+                            match message with
+                            | Item item ->
+                                let newBatch = item :: batch
+                                let newQueryCount = queryCount + 1
+                                if newQueryCount < queriesPerBatch then
+                                    return Choice1Of2 (newQueryCount, newBatch, batchCount, transaction)
+                                else
+                                    return Choice2Of2 (newBatch, None)
+                            | Finish replyChannel ->
+                                // No more queries
+                                return Choice2Of2 (batch, Some replyChannel)
+                            | Timeout ->
+                                match transaction with
+                                | Some t -> do! keepAliveTransation t
+                                | None -> ()
+
+                                return Choice1Of2 state
+                        }
 
                     match newStateOrCompleteBatch with
                     | Choice1Of2 newState ->
                         return! loop newState
                     | Choice2Of2 (reversedBatch, finalBatchReplyChannel) ->
-                        let transaction = transaction |> Option.getOrElseLazy (lazy beginTransaction neo4jEndpoint)
+                        let! transaction =
+                            match transaction with
+                            | Some t -> async { return t }
+                            | None -> retryForever "begin transaction" (beginTransaction neo4jEndpoint)
 
-                        List.rev reversedBatch
-                        |> Seq.map (fun (graphName, actions) -> graphTransactionToQuery graphClient graphName actions)
-                        |> addStatementsToTransaction transaction
+                        let queries = 
+                            List.rev reversedBatch
+                            |> Seq.map (fun (graphName, actions) -> graphTransactionToQuery graphClient graphName actions)
+
+                        do! retryForever "add statements" (addStatementsToTransaction transaction queries)
 
                         match finalBatchReplyChannel with
                         | Some replyChannel ->
-                            commitTransaction transaction
+                            do! retryForever "commit transaction" (commitTransaction transaction)
                             replyChannel.Reply()
                             return ()
                         | None ->
@@ -355,7 +397,7 @@ module Operations =
                             if newBatchCount < batchesPerTransaction then
                                 return! loop (0, List.empty, newBatchCount, Some transaction)
                             else
-                                commitTransaction transaction
+                                do! retryForever "commit transaction" (commitTransaction transaction)
                                 return! loop emptyState
                 }
 
