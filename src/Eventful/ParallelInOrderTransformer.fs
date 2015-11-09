@@ -16,6 +16,9 @@ type internal ParallelInOrderTransformerCompleteItem<'TOutput> = {
     OnComplete : ('TOutput -> unit)
 }
 
+/// A bounded queue with one or more consumers.
+/// On Dispose, consumers are signalled that no more items will be added and
+/// Dispose will block until all consumers have stopped.
 type ProducerConsumerQueue<'T> (maxItems: int, workerCount : int, workerLoop) =
     let workerShutDownEvent = new CountdownEvent(workerCount)
     let queue = new BlockingCollection<'T>(maxItems)
@@ -30,9 +33,11 @@ type ProducerConsumerQueue<'T> (maxItems: int, workerCount : int, workerLoop) =
         List.init workerCount (fun _ -> createBackgroundThread threadWorker)
         |> List.iter (fun t -> t.Start())
 
+    /// Add an item to the queue
     member x.Add (item : 'T) =
         queue.Add(item)
 
+    /// Dispose the queue, signal the consumers to stop, and block until all consumers finish.
     member x.Dispose () = 
         // will make GetConsumingEnumerable finish
         // which means worker thread should stop
@@ -40,13 +45,15 @@ type ProducerConsumerQueue<'T> (maxItems: int, workerCount : int, workerLoop) =
 
         // wait for all the worker threads to stop
         workerShutDownEvent.Wait()
+        workerShutDownEvent.Dispose()
 
         // dispose the queue
         queue.Dispose()
 
     interface IDisposable with
         member x.Dispose () = x.Dispose()
-    
+
+/// Apply a transformation to incoming items in parallel, but still yield the results in the original order the items were added.    
 type ParallelInOrderTransformer<'TInput,'TOutput>(work : 'TInput -> 'TOutput, ?maxItems : int, ?workerCount : int) =
     let log = createLogger <| sprintf "Eventful.ParallelInOrderTransformer<%s,%s>" typeof<'TInput>.Name typeof<'TOutput>.Name
     let currentIndex = ref -1L
@@ -96,6 +103,7 @@ type ParallelInOrderTransformer<'TInput,'TOutput>(work : 'TInput -> 'TOutput, ?m
                 }
     let workQueue = new ProducerConsumerQueue<_>(maxItems, workerCount, workerLoop)
 
+    /// Add a new item to be processed, along with the continuation to be executed once it and all preceeding items have been processed.
     member x.Process (input : 'TInput, onComplete : 'TOutput -> unit) = 
         let index = System.Threading.Interlocked.Increment currentIndex
         workQueue.Add 

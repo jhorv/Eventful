@@ -87,6 +87,7 @@ module EventStream =
         EventType : string
     }
 
+    /// Statements in a DSL for processsing event streams.
     type EventStreamLanguage<'N,'TMetadata> =
     /// Reads the first event at or after `startEventNumber` from the `streamName` stream.
     /// Returns None if there are no events at or after `startEventNumber` on the stream.
@@ -101,13 +102,15 @@ module EventStream =
     | WriteToStream of string * ExpectedAggregateVersion * seq<EventStreamEvent<'TMetadata>> * (WriteResult -> 'N)
     | WriteStreamMetadata of string * EventStreamMetadata * 'N
     | NotYetDone of (unit -> 'N)
-    and 
-        FreeEventStream<'F,'R,'TMetadata> = 
-        | FreeEventStream of EventStreamLanguage<FreeEventStream<'F,'R,'TMetadata>,'TMetadata>
-        | Pure of 'R
-    and
-        EventStreamProgram<'A,'TMetadata> = FreeEventStream<obj,'A,'TMetadata>
 
+    type FreeEventStream<'F,'R,'TMetadata> =
+    | FreeEventStream of EventStreamLanguage<FreeEventStream<'F,'R,'TMetadata>,'TMetadata>
+    | Pure of 'R
+
+    /// A program in a DSL for processing event streams.
+    type EventStreamProgram<'A,'TMetadata> = FreeEventStream<obj,'A,'TMetadata>
+
+    /// Transform the output of the continuation in an event stream statement
     let fmap f streamWorker = 
         match streamWorker with
         | ReadFromStream (stream, number, streamRead) -> 
@@ -133,6 +136,7 @@ module EventStream =
 
     let empty = Pure ()
 
+    /// Lift an event stream statement into an event stream program
     // liftF :: (Functor f) => f r -> Free f r -- haskell signature
     let liftF command = FreeEventStream (fmap Pure command)
 
@@ -155,6 +159,7 @@ module EventStream =
     let runAsync (a : Async<'a>) : FreeEventStream<'f2,'a,'m> =  
         RunAsync(a) |> liftF
 
+    /// Compose two event stream programs, where the second program is determined based on the output of the first.
     let rec bind f v =
         match v with
         | FreeEventStream x -> FreeEventStream (fmap (bind f) x)

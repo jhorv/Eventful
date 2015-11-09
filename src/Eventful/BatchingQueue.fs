@@ -1,20 +1,20 @@
 ﻿namespace Eventful
 
-type internal QueueItem<'T,'U> = 'T * AsyncReplyChannel<'U>
-type internal BatchWork<'TKey, 'T,'U> = 'TKey * seq<QueueItem<'T,'U>>
+type internal QueueItem<'TItem, 'TResult> = 'TItem * AsyncReplyChannel<'TResult>
+type internal BatchWork<'TKey, 'TItem,'TResult> = 'TKey * seq<QueueItem<'TItem, 'TResult>>
 
-type internal BatchingQueueMessage<'TKey, 'T,'U> =
-    | Enqueue of 'TKey * QueueItem<'T,'U>
-    | Consume of AsyncReplyChannel<BatchWork<'TKey, 'T,'U>>
+type internal BatchingQueueMessage<'TKey, 'TItem, 'TResult> =
+    | Enqueue of 'TKey * QueueItem<'TItem, 'TResult>
+    | Consume of AsyncReplyChannel<BatchWork<'TKey, 'TItem, 'TResult>>
 
-type internal BatchingQueueState<'TKey,'T,'U when 'TKey : equality> = {
-    Queues : System.Collections.Generic.Dictionary<'TKey,System.Collections.Generic.Queue<QueueItem<'T,'U>>>
+type internal BatchingQueueState<'TKey, 'TItem, 'TResult when 'TKey : equality> = {
+    Queues : System.Collections.Generic.Dictionary<'TKey, System.Collections.Generic.Queue<QueueItem<'TItem, 'TResult>>>
     HasWork : System.Collections.Generic.HashSet<'TKey>
     mutable ItemCount : int
 }
 with static member Zero = 
         { 
-            Queues = new System.Collections.Generic.Dictionary<'TKey,System.Collections.Generic.Queue<QueueItem<'T,'U>>>() 
+            Queues = new System.Collections.Generic.Dictionary<'TKey, System.Collections.Generic.Queue<QueueItem<'TItem, 'TResult>>>() 
             HasWork = new System.Collections.Generic.HashSet<'TKey>()
             ItemCount = 0
         }
@@ -22,18 +22,18 @@ with static member Zero =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal BatchingQueueState =
     let rnd = new System.Random()
-    let enqeue (queue : BatchingQueueState<'TKey,'T,'U>) (key : 'TKey) (item : QueueItem<'T,'U>) =
+    let enqeue (queue : BatchingQueueState<'TKey, 'TItem, 'TResult>) (key : 'TKey) (item : QueueItem<'TItem, 'TResult>) =
         if (queue.Queues.ContainsKey key) then
             (queue.Queues.Item key).Enqueue item
         else
-            let q = new System.Collections.Generic.Queue<QueueItem<'T,'U>>()
+            let q = new System.Collections.Generic.Queue<QueueItem<'TItem,'TResult>>()
             q.Enqueue item
             queue.Queues.Add(key, q)
         queue.HasWork.Add key |> ignore
         queue.ItemCount <- queue.ItemCount + 1
         queue
 
-    let getBatch (queue: BatchingQueueState<'TKey,'T,'U>) size : (BatchWork<'TKey, 'T,'U> * BatchingQueueState<'TKey,'T,'U>) =
+    let getBatch (queue: BatchingQueueState<'TKey, 'TItem, 'TResult>) size : (BatchWork<'TKey, 'TItem, 'TResult> * BatchingQueueState<'TKey, 'TItem, 'TResult>) =
         let key = queue.HasWork |> Seq.nth (rnd.Next(queue.HasWork.Count))
         let selectedQueue = queue.Queues.Item key
         let batchSize = min size selectedQueue.Count
@@ -57,10 +57,13 @@ module internal BatchingQueueState =
         queue.ItemCount <- queue.ItemCount - batchSize
         ((key,batch), queue)
 
-    let queueSize (queue: BatchingQueueState<'TKey,'T,'U>) = 
+    let queueSize (queue: BatchingQueueState<'TKey, 'TItem, 'TResult>) = 
         queue.ItemCount
 
-type BatchingQueue<'TKey,'T,'U when 'TKey : equality> 
+/// A queue which groups items by key. Consumers receive the set of items
+/// under a randomly chosen key, with the maximum number of items returned limited
+/// to `maxBatchSize`.
+type BatchingQueue<'TKey, 'TItem, 'TResult when 'TKey : equality> 
     (
         maxBatchSize : int,
         maxQueueSize : int
@@ -91,7 +94,7 @@ type BatchingQueue<'TKey,'T,'U when 'TKey : equality>
                 Some(next state')
             | _ -> None) 
         and enqueue state key item reply = BatchingQueueState.enqeue state key (item, reply)
-        and consume state (reply :  AsyncReplyChannel<BatchWork<'TKey,'T,'U>>) = 
+        and consume state (reply :  AsyncReplyChannel<BatchWork<'TKey,'TItem,'TResult>>) = 
             let (batch, state') = BatchingQueueState.getBatch state maxBatchSize
             reply.Reply batch
             state'
@@ -104,11 +107,14 @@ type BatchingQueue<'TKey,'T,'U when 'TKey : equality>
             else
                 hasWork state 
 
-        empty BatchingQueueState<'TKey,'T,'U>.Zero
+        empty BatchingQueueState<'TKey,'TItem,'TResult>.Zero
     )
 
-    member x.Consume () : Async<BatchWork<'TKey, 'T,'U>> =
+    /// Get a batch of work to be done. The consumer must reply with the outcome for each item on
+    /// the item's reply channel once it has been processed.
+    member x.Consume () : Async<BatchWork<'TKey, 'TItem, 'TResult>> =
         agent.PostAndAsyncReply(fun ch -> Consume ch)
 
-    member x.Work (key : 'TKey) (item : 'T) : Async<'U> =
+    /// Add an item to the queue and return the processing outcome.
+    member x.Work (key : 'TKey) (item : 'TItem) : Async<'TResult> =
         agent.PostAndAsyncReply(fun ch -> Enqueue (key, (item, ch)))

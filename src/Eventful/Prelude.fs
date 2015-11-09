@@ -185,3 +185,6 @@ module Prelude =
        let mutable intvalue = 0L
        if System.Int64.TryParse(str, &intvalue) then Some(intvalue)
        else None
+
+    let makeProbablyUniqueShortName () =
+        System.Guid.NewGuid().ToString().Substring(0, 8)

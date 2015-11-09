@@ -18,6 +18,7 @@ type internal CompleteQueueMessage<'TGroup, 'TItem when 'TGroup : comparison> =
     | Complete of 'TGroup * Guid
     | NotifyWhenAllComplete of AsyncReplyChannel<unit>
 
+/// A wrapper around MutableOrderedGroupingBoundedQueue that will retry failed work multiple times.
 type WorktrackingQueue<'TGroup, 'TInput, 'TWorkItem>
     (
         grouping : 'TInput -> seq<'TWorkItem * 'TGroup>,
@@ -71,6 +72,7 @@ type WorktrackingQueue<'TGroup, 'TInput, 'TWorkItem>
                                     | _ ->
                                         do! runWithCancellation workerName ct work
                                 with | e ->
+                                    // TODO: The async returned by queue.Consume has a catch-all in it, so we probably never get here...
                                     log.DebugWithException <| lazy (sprintf "Work failed..retrying: %A" workerName, e)
 
                                     return! loop(count + 1)

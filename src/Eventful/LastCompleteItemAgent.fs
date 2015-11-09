@@ -4,15 +4,13 @@ open System
 open FSharpx.Collections
 open FSharpx
 
-type SortedSet<'a> = System.Collections.Generic.SortedSet<'a>
-
-type NotificationItem<'TItem> = {
+type internal NotificationItem<'TItem> = {
     Item : 'TItem
     Tag : string option
     Callback : Async<unit>
 }
 
-type MutableLastCompleteTrackingState<'TItem when 'TItem : comparison> () =
+type internal MutableLastCompleteTrackingState<'TItem when 'TItem : comparison> () =
     let started = new System.Collections.Generic.SortedSet<'TItem>()
     let completed = new System.Collections.Generic.SortedSet<'TItem>()
     let notifications = new System.Collections.Generic.SortedDictionary<'TItem, NotificationItem<'TItem> list>()
@@ -24,7 +22,7 @@ type MutableLastCompleteTrackingState<'TItem when 'TItem : comparison> () =
 
     // remove matching head sequences from xs and ys
     // returns sequences and highest matching value
-    let removeMatchingHeads (xs : SortedSet<'TItem>) (ys : SortedSet<'TItem>) =
+    let removeMatchingHeads (xs : System.Collections.Generic.SortedSet<'TItem>) (ys : System.Collections.Generic.SortedSet<'TItem>) =
         let rec loop h = 
             match (xs |> tryHead, ys |> tryHead) with
             | Some x, Some y
@@ -112,14 +110,18 @@ type MutableLastCompleteTrackingState<'TItem when 'TItem : comparison> () =
 
     static member Empty = new MutableLastCompleteTrackingState<'TItem>()
 
-type LastCompleteItemMessage2<'TItem when 'TItem : comparison> = 
+type internal LastCompleteItemMessage2<'TItem when 'TItem : comparison> = 
 |    Start of 'TItem 
 |    Complete of 'TItem
 |    LastComplete of (AsyncReplyChannel<'TItem option>) 
 |    Notify of ('TItem * string option * Async<unit>)
 
+/// Track the maximum item completed where all preceeding items are also completed.
+/// Items must be started in order (i.e. each item added must compare greater than all
+/// previously added items).
 type LastCompleteItemAgent<'TItem when 'TItem : comparison> (?name : string) = 
-    let log = createLogger <| sprintf "Eventful.LastCompleteItemAgent<%s>" typeof<'TItem>.Name
+    let name = name |> Option.getOrElseF makeProbablyUniqueShortName
+    let log = createLogger <| sprintf "Eventful.LastCompleteItemAgent<%s> %s" typeof<'TItem>.Name name
 
     let runCallbacks callbacks = async {
          for callback in callbacks do
@@ -167,14 +169,18 @@ type LastCompleteItemAgent<'TItem when 'TItem : comparison> (?name : string) =
             log.ErrorWithException <| lazy("Exception thrown by LastCompleteItemAgent", exn))
         theAgent
 
+    /// Get the lastest completed item where all preceeding items are also completed.
     member x.LastComplete () : Async<'TItem option> =
         agent.PostAndAsyncReply((fun ch -> LastComplete(ch)))
 
+    /// Record the start of a new item
     member x.Start(item) = 
       agent.Post <| Start item
 
+    /// Record the completion of an item
     member x.Complete(item) = 
       agent.Post(Complete item)
 
+    /// Subscribe to be notified when the given item is completed
     member x.NotifyWhenComplete(item, tag : string option, callback :  Async<unit>) =
       agent.Post <| Notify (item, tag, callback)

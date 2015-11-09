@@ -3,6 +3,7 @@
 open FSharpx
 
 module MultiCommand = 
+    /// Statements in a DSL for dispatching commands
     type MultiCommandLanguage<'N,'TCommandContext,'TResult> =
     | RunCommand of (Async<(obj * 'TCommandContext * ('TResult -> 'N))>)
     | RunAsync of Async<obj> * (obj -> 'N)
