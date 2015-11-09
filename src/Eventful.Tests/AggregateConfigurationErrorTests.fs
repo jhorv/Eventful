@@ -13,6 +13,7 @@ open Eventful.Validation
 
 open FSharpx
 open FSharpx.Collections
+open FSharpx.Functional
 
 open FSharpx.Choice
 open FSharpx.Validation

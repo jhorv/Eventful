@@ -6,7 +6,8 @@ open Eventful
 open FSharpx.Choice
 open FSharpx
 open FSharpx.Collections
-open FSharp.Control.AsyncSeq
+open FSharpx.Functional
+open FSharp.Control
 
 [<CLIMutable>]
 type AddBookCommand = {

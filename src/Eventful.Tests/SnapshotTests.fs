@@ -5,6 +5,7 @@ open Eventful
 open Eventful.Testing
 open FSharpx
 open FSharpx.Collections
+open FSharpx.Functional
 
 open Xunit
 open FsUnit.Xunit
@@ -76,11 +77,11 @@ module SnapshotTests =
             cmds
             |> List.fold (fun (s : TestSystem<_,_,_,_>) cmd -> s.RunCommand cmd (Guid.NewGuid())) testSystem
             |> TestSystem.getStreamEvents "Foo"
-            |> Vector.map (function
+            |> PersistentVector.map (function
                 | Event eventData ->
-                    eventData.Body |> Vector.singleton
-                | _ -> Vector.empty)
-            |> Vector.flatten
+                    eventData.Body |> PersistentVector.singleton
+                | _ -> PersistentVector.empty)
+            |> PersistentVector.flatten
             |> List.ofSeq
 
         getEvents testSystemWithSnapshots |> should equal (getEvents testSystemWithoutSnapshots)

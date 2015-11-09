@@ -2,8 +2,9 @@
 
 open Eventful
 open FSharpx
+open FSharpx.Functional
 open BookLibrary.Aggregates
-open FSharp.Control.AsyncSeq
+open FSharp.Control
 
 [<CLIMutable>]
 type AddBookCopyCommand = {

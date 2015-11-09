@@ -5,6 +5,7 @@ open Eventful
 open Eventful.Testing
 open FSharpx
 open FSharpx.Option
+open FSharpx.Functional
 
 open Xunit
 open FsUnit.Xunit

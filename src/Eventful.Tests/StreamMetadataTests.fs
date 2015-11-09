@@ -5,6 +5,7 @@ open Eventful
 open Eventful.Testing
 open FSharpx
 open FSharpx.Collections
+open FSharpx.Functional
 
 open Xunit
 open Swensen.Unquote
@@ -66,7 +67,7 @@ module StreamMetadataTests =
             |> TestSystem.runCommand { FooCmd.Id = fooId } (Guid.NewGuid())
             |> TestSystem.getStreamMetadata "Foo"
 
-        result =? Some (Vector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
+        result =? Some (PersistentVector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -78,7 +79,7 @@ module StreamMetadataTests =
             |> TestSystem.runCommand { FooCmd.Id = fooId } (Guid.NewGuid())
             |> TestSystem.getStreamMetadata "Foo"
 
-        result =? Some (Vector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
+        result =? Some (PersistentVector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
 
     [<Fact>]
     [<Trait("category", "unit")>]
