@@ -198,9 +198,9 @@ module FizzBuzzCommandStateChangeTests =
 
         let fizzBuzzStateBuilder =
             StateBuilder.Empty "FizzBuzzStateBuilder" (false, false)
-            |> StateBuilder.unitIdHandler (fun (_,e:IncrimentEvent,_) -> (false,false)) // reset on incriment
-            |> StateBuilder.unitIdHandler (fun ((_, buzz), e:FizzEvent, _) -> (true, buzz)) // fizz appeared
-            |> StateBuilder.unitIdHandler (fun ((fizz, _), e:BuzzEvent, _) -> (fizz, true)) // buzz appeared
+            |> StateBuilder.aggregateStateHandler (fun (_,e:IncrimentEvent,_) -> (false,false)) // reset on incriment
+            |> StateBuilder.aggregateStateHandler (fun ((_, buzz), e:FizzEvent, _) -> (true, buzz)) // fizz appeared
+            |> StateBuilder.aggregateStateHandler (fun ((fizz, _), e:BuzzEvent, _) -> (fizz, true)) // buzz appeared
 
         let fizzStateChangeHandler = 
             fun before after ->
@@ -246,7 +246,7 @@ module FizzBuzzCommandStateChangeTests =
 
     let validateStream : IStateBuilder<(bool * bool * bool * int) option, TestMetadata, unit> =
         StateBuilder.Empty "ValidateStream" (Some (false, false, false, 0))
-        |> StateBuilder.unitIdHandler (fun (s, _:IncrimentEvent, _) ->
+        |> StateBuilder.aggregateStateHandler (fun (s, _:IncrimentEvent, _) ->
               maybe {
                   let! (fizzExpected, buzzExpected, fizzBuzzExpected, count) = s
                   return! 
@@ -260,7 +260,7 @@ module FizzBuzzCommandStateChangeTests =
                       | _ -> None
               }
         )
-        |> StateBuilder.unitIdHandler (fun (s, _:FizzEvent, _) ->
+        |> StateBuilder.aggregateStateHandler (fun (s, _:FizzEvent, _) ->
               maybe {
                   let! (fizzExpected, buzzExpected, fizzBuzzExpected, count) = s
                   return! 
@@ -270,7 +270,7 @@ module FizzBuzzCommandStateChangeTests =
                         None
               }
         )
-        |> StateBuilder.unitIdHandler (fun (s, _:BuzzEvent, _) ->
+        |> StateBuilder.aggregateStateHandler (fun (s, _:BuzzEvent, _) ->
               maybe {
                   let! (fizzExpected, buzzExpected, fizzBuzzExpected, count) = s
                   return! 
@@ -280,7 +280,7 @@ module FizzBuzzCommandStateChangeTests =
                         None
               }
         )
-        |> StateBuilder.unitIdHandler (fun (s, _:FizzBuzzEvent, _) ->
+        |> StateBuilder.aggregateStateHandler (fun (s, _:FizzBuzzEvent, _) ->
               maybe {
                   let! (fizzExpected, buzzExpected, fizzBuzzExpected, count) = s
                   return! 

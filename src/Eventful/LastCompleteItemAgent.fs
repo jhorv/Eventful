@@ -4,7 +4,7 @@ open System
 open FSharpx.Collections
 open FSharpx
 
-type internal NotificationItem<'TItem> = {
+type NotificationItem<'TItem> = {
     Item : 'TItem
     Tag : string option
     Callback : Async<unit>
