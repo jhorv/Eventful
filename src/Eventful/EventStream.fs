@@ -89,9 +89,6 @@ module EventStream =
 
     /// Statements in a DSL for processsing event streams.
     type EventStreamLanguage<'N,'TMetadata> =
-    /// Reads the first event at or after `startEventNumber` from the `streamName` stream.
-    /// Returns None if there are no events at or after `startEventNumber` on the stream.
-    /// To read the next event, read from (previousEventToken.Number + 1) *not* (previousStartEventNumber + 1)
     | ReadFromStream of streamName : string * startEventNumber : int * (EventToken option -> 'N)
     | ReadSnapshot of string * Map<string, Type> * (StateSnapshot -> 'N)
     | GetEventStoreTypeToClassMap of unit * (EventStoreTypeToClassMap -> 'N)
@@ -140,22 +137,44 @@ module EventStream =
     // liftF :: (Functor f) => f r -> Free f r -- haskell signature
     let liftF command = FreeEventStream (fmap Pure command)
 
-    let readFromStream stream number = 
-        ReadFromStream (stream, number, id) |> liftF
-    let readSnapshot typeMap stream = 
-        ReadSnapshot (typeMap, stream, id) |> liftF
+    /// Create an event stream program that reads the first event at or after `startEventNumber` from the `streamName` stream.
+    /// The program outputs None if there are no events at or after `startEventNumber` on the stream.
+    /// To read the next event, read from (previousEventToken.Number + 1) *not* (previousStartEventNumber + 1)
+    let readFromStream streamName startEventNumber = 
+        ReadFromStream (streamName, startEventNumber, id) |> liftF
+
+    /// Create an event stream program that outputs the current state snapshot for the `streamName` stream.
+    /// `typeMap` maps event names to event types.
+    let readSnapshot streamName typeMap = 
+        ReadSnapshot (streamName, typeMap, id) |> liftF
+
+    /// Create an event stream program that outputs the event name to event type mapping.
     let getEventStoreTypeToClassMap unit =
         GetEventStoreTypeToClassMap ((), id) |> liftF
+
+    /// Create an event stream program that outputs the event type to event name mapping.
     let getClassToEventStoreTypeMap unit =
         GetClassToEventStoreTypeMap ((), id) |> liftF
+
+    /// Create an event stream program that outputs the event data referenced by the given `eventToken`.
     let readValue eventToken = 
         ReadValue(eventToken, id) |> liftF
-    let writeToStream stream number events = 
-        WriteToStream(stream, number, events, id) |> liftF
-    let writeStreamMetadata stream streamMetadata = 
-        WriteStreamMetadata(stream, streamMetadata, ()) |> liftF
+
+    /// Create an event stream program that writes the given `events` to the `streamName` stream
+    /// and outputs the outcome of the write.  The stream's current position must match the position
+    /// specified by `number`.
+    let writeToStream streamName number events = 
+        WriteToStream(streamName, number, events, id) |> liftF
+
+    /// Create an event stream program that writes the given stream metadata to the stream.
+    let writeStreamMetadata streamName streamMetadata = 
+        WriteStreamMetadata(streamName, streamMetadata, ()) |> liftF
+
+    /// Create an event stream program that logs the given message to the logger.
     let logMessage logLevel messageTemplate data = 
         LogMessage (logLevel, messageTemplate, data, ()) |> liftF
+
+    /// Create an event stream program that outputs the result of an asynchronous computation.
     let runAsync (a : Async<'a>) : FreeEventStream<'f2,'a,'m> =  
         RunAsync(a) |> liftF
 
@@ -217,16 +236,19 @@ module EventStream =
 
     // Higher level eventstream operations
 
+    /// Create an event stream program that writes an event link to a stream
     let writeLink stream expectedVersion linkStream linkEventNumber metadata =
         let writes : seq<EventStreamEvent<'TMetadata>> = Seq.singleton (EventStreamEvent.EventLink(linkStream, linkEventNumber, metadata))
         writeToStream stream expectedVersion writes
 
+    /// Create an event stream program that converts an event instance into an EventStreamEvent
     let getEventStreamEvent evt metadata = eventStream {
         let! eventTypeMap = getClassToEventStoreTypeMap ()
         let eventType = eventTypeMap.Item (evt.GetType())
         return EventStreamEvent.Event { Body = evt :> obj; EventType = eventType; Metadata = metadata }
     }
 
+    /// Create an event stream program that folds over the specified stream
     let rec foldStream stream (start : int) acc init = eventStream {
         let! item = readFromStream stream start
 
@@ -241,6 +263,8 @@ module EventStream =
             | None -> eventStream { return init } 
     }
 
+    /// Create an event stream program that retries a given sub-program up to 100 times
+    /// or until it outputs something other than `Choice2Of2 RunFailure.WrongExpectedVersion`.
     let retryOnWrongVersion f = eventStream {
         let maxTries = 100
         let retry = ref true

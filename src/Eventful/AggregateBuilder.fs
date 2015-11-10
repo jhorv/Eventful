@@ -1,6 +1,7 @@
 ﻿namespace Eventful
 
 open System
+open FSharpx
 open FSharpx.Choice
 open FSharpx.Option
 open FSharpx.Collections
@@ -8,9 +9,13 @@ open FSharp.Control
 
 open Eventful.EventStream
 open Eventful.MultiCommand
+open Eventful.Validation
 
+/// The result from a successful command execution
 type CommandSuccess<'TBaseEvent, 'TMetadata> = {
-    Events : (string * 'TBaseEvent * 'TMetadata) list
+    /// New events that were written as a result of the command
+    Events : ((* stream name *) string * 'TBaseEvent * 'TMetadata) list
+    /// The new EventPosition after the write
     Position : EventPosition option
 }
 with 
@@ -19,9 +24,8 @@ with
         Position = None
     }
 
+/// Indicates success or failure of a command execution
 type CommandResult<'TBaseEvent,'TMetadata> = Choice<CommandSuccess<'TBaseEvent,'TMetadata>,NonEmptyList<CommandFailure>> 
-
-type StreamNameBuilder<'TId> = ('TId -> string)
 
 type IRegistrationVisitor<'T,'U> =
     abstract member Visit<'TCmd> : 'T -> 'U
@@ -34,46 +38,76 @@ type EventResult = unit
 type metadataBuilder<'TMetadata> = string -> 'TMetadata
 
 type IStateChangeHandler<'TMetadata, 'TBaseEvent> =
+    /// Get a list of all state builders for the state change handler including also the extra ones passed in to the function
     abstract member AddStateBuilder : IStateBlockBuilder<'TMetadata, unit> list -> IStateBlockBuilder<'TMetadata, unit> list 
+    /// A handler that can produce extra events to write when the aggregate state has changed
     abstract member Handler : StateSnapshot -> StateSnapshot -> seq<'TBaseEvent * 'TMetadata>
 
 // 'TContext can either be CommandContext or EventContext
 type AggregateConfiguration<'TContext, 'TAggregateId, 'TMetadata, 'TBaseEvent> = {
     /// used to make processing idempotent
     GetUniqueId : 'TMetadata -> string option
+
+    /// Configuration for the aggreagate's event stream (e.g. max age for events for keep, etc.)
     StreamMetadata : EventStreamMetadata
+
+    /// Get the event stream name based on the context and aggreate id
     GetStreamName : 'TContext -> 'TAggregateId -> string
+
+    /// The state builder that produces the complete aggregate state
     StateBuilder : IStateBuilder<Map<string,obj>, 'TMetadata, unit>
+
+    /// The list of state change handlers
     StateChangeHandlers : LazyList<IStateChangeHandler<'TMetadata, 'TBaseEvent>>
 }
 
+/// Interface for an aggregate command handler.
 type ICommandHandler<'TAggregateId,'TCommandContext, 'TMetadata, 'TBaseEvent> =
+    /// The type of command that this handler can process
     abstract member CmdType : Type
+
+    /// Get a list of all state builders for the command handler including also the extra ones passed in to the function
     abstract member AddStateBuilder : IStateBlockBuilder<'TMetadata, unit> list -> IStateBlockBuilder<'TMetadata, unit> list
+
+    /// Get the aggregate instance id from the command context and command
     abstract member GetId : 'TCommandContext-> obj -> 'TAggregateId
-                    // AggregateType -> Cmd -> Source Stream -> EventNumber -> Program
-    abstract member Handler : AggregateConfiguration<'TCommandContext, 'TAggregateId, 'TMetadata, 'TBaseEvent> -> 'TCommandContext -> obj -> EventStreamProgram<CommandResult<'TBaseEvent,'TMetadata>,'TMetadata>
+
+    /// Get the command handler event stream program
+    abstract member Handler : AggregateConfiguration<'TCommandContext, 'TAggregateId, 'TMetadata, 'TBaseEvent> -> 'TCommandContext -> (* command *) obj -> EventStreamProgram<CommandResult<'TBaseEvent,'TMetadata>,'TMetadata>
+
     abstract member Visitable : IRegistrationVisitable
 
+/// Interface for an aggregate event handler.
 type IEventHandler<'TAggregateId,'TMetadata, 'TEventContext,'TBaseEvent when 'TAggregateId : equality> =
+    /// Get a list of all state builders for the event handler including also the extra ones passed in to the function
     abstract member AddStateBuilder : IStateBlockBuilder<'TMetadata, unit> list -> IStateBlockBuilder<'TMetadata, unit> list
+
+    /// The type of event that this handler can process
     abstract member EventType : Type
-                    // AggregateType -> Source Stream -> Source EventNumber -> Event -> -> Program
+
+    /// Get the event handler event stream program
     abstract member Handler : AggregateConfiguration<'TEventContext, 'TAggregateId, 'TMetadata, 'TBaseEvent> -> 'TEventContext -> PersistedEvent<'TMetadata> -> Async<EventStreamProgram<EventResult,'TMetadata>>
 
+/// Interface for an aggregate event handler. The handler program can execute commands in multiple aggregates.
 type IMultiCommandEventHandler<'TMetadata, 'TEventContext,'TCommandContext, 'TBaseEvent> = 
-     abstract member EventType : Type
-     abstract member Handler : 'TEventContext -> PersistedEvent<'TMetadata> -> MultiCommandProgram<unit,'TCommandContext,CommandResult<'TBaseEvent,'TMetadata>>
+    /// The type of event that this handler can process
+    abstract member EventType : Type
 
+    /// Get the event handler multi command program
+    abstract member Handler : 'TEventContext -> PersistedEvent<'TMetadata> -> MultiCommandProgram<unit,'TCommandContext,CommandResult<'TBaseEvent,'TMetadata>>
+
+/// Interface for a wakeup handler.
 type IWakeupHandler<'TAggregateId,'TCommandContext, 'TMetadata, 'TBaseEvent> =
+    /// The state builder that calculates the next wakeup time
     abstract member WakeupFold : WakeupFold<'TMetadata>
-                            //streamId -> getUniqueId                   -> time     -> program
-    abstract member Handler : AggregateConfiguration<'TEventContext, 'TAggregateId, 'TMetadata, 'TBaseEvent> -> string   -> UtcDateTime -> EventStreamProgram<EventResult,'TMetadata>
+
+    /// Get the wakeup handler event stream program
+    abstract member Handler : AggregateConfiguration<'TEventContext, 'TAggregateId, 'TMetadata, 'TBaseEvent> -> (* streamId *) string -> UtcDateTime -> EventStreamProgram<EventResult,'TMetadata>
 
 type AggregateCommandHandlers<'TAggregateId,'TCommandContext,'TMetadata, 'TBaseEvent> = seq<ICommandHandler<'TAggregateId,'TCommandContext,'TMetadata, 'TBaseEvent>>
 type AggregateEventHandlers<'TAggregateId,'TMetadata, 'TEventContext,'TBaseEvent  when 'TAggregateId : equality> = seq<IEventHandler<'TAggregateId, 'TMetadata, 'TEventContext,'TBaseEvent >>
 
-type AggregateHandlerState<'TId,'TCommandContext,'TEventContext,'TMetadata,'TBaseEvent when 'TId : equality> = {
+type private AggregateHandlerState<'TId,'TCommandContext,'TEventContext,'TMetadata,'TBaseEvent when 'TId : equality> = {
     commandHandlers : list<ICommandHandler<'TId,'TCommandContext,'TMetadata, 'TBaseEvent>> 
     eventHandlers : list<IEventHandler<'TId,'TMetadata, 'TEventContext,'TBaseEvent>>
     stateChangeHandlers : list<IStateChangeHandler<'TMetadata, 'TBaseEvent>>
@@ -86,6 +120,7 @@ with
           stateChangeHandlers = List.empty
           multiCommandEventHandlers = List.empty }
 
+/// A container for all of an aggregate's handlers
 type AggregateHandlers<'TId,'TCommandContext,'TEventContext,'TMetadata,'TBaseEvent when 'TId : equality> private 
     (
         state : AggregateHandlerState<'TId,'TCommandContext,'TEventContext,'TMetadata,'TBaseEvent> 
@@ -140,27 +175,23 @@ module AggregateHandlers =
     let addMultiCommandEventHandler handler (aggregateHandlers : AggregateHandlers<_,_,_,_,_>) =
         aggregateHandlers.AddMultiCommandEventHandler handler
 
-type IHandler<'TId,'TCommandContext,'TEventContext when 'TId : equality> = 
-    abstract member add : AggregateHandlers<'TId,'TCommandContext,'TEventContext,'TMetadata,'TBaseEvent> -> AggregateHandlers<'TId,'TCommandContext,'TEventContext,'TMetadata,'TBaseEvent>
-
-open FSharpx
-open Eventful.Validation
-
+/// A command-handler (more strongly-typed than ICommandHandler)
 type CommandHandler<'TCmd, 'TCommandContext, 'TCommandState, 'TAggregateId, 'TMetadata, 'TBaseEvent> = {
     GetId : 'TCommandContext -> 'TCmd -> 'TAggregateId
     StateBuilder : IStateBuilder<'TCommandState, 'TMetadata, unit>
     Handler : 'TCommandState -> 'TCommandContext -> 'TCmd -> Async<Choice<seq<'TBaseEvent * 'TMetadata>, NonEmptyList<ValidationFailure>>>
 }
 
+/// A pair of destination aggregate instance id and a function from handler state to new events to be written
 type MultiEventRun<'TAggregateId,'TMetadata,'TState,'TBaseEvent when 'TAggregateId : equality> = ('TAggregateId * ('TState -> seq<'TBaseEvent * 'TMetadata>))
 
-open Eventful.Validation
 
 module AggregateActionBuilder =
     open EventStream
 
     let log = createLogger "Eventful.AggregateActionBuilder"
 
+    /// Construct a new CommandHandler instance with an async result
     let fullHandlerAsync<'TId, 'TState,'TCmd, 'TCommandContext,'TMetadata, 'TBaseEvent,'TKey> getId (stateBuilder : IStateBuilder<_,_,'TKey>) f =
         {
             GetId = getId
@@ -168,6 +199,7 @@ module AggregateActionBuilder =
             Handler = f
         } : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TId, 'TMetadata, 'TBaseEvent> 
 
+    /// Construct a new CommandHandler instance
     let fullHandler<'TId, 'TState,'TCmd,'TCommandContext,'TMetadata, 'TBaseEvent,'TKey> getId (stateBuilder : IStateBuilder<_,_,'TKey>) f =
         {
             GetId = getId
@@ -175,6 +207,7 @@ module AggregateActionBuilder =
             Handler = (fun a b c ->  f a b c |> Async.returnM)
         } : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TId, 'TMetadata, 'TBaseEvent> 
 
+    /// Construct a new CommandHandler instance which ignores state and command context and produces exactly one event
     let simpleHandler<'TAggregateId, 'TState, 'TCmd, 'TCommandContext, 'TMetadata, 'TBaseEvent> getId stateBuilder (f : 'TCmd -> ('TBaseEvent * 'TMetadata)) =
         {
             GetId = getId
@@ -182,19 +215,15 @@ module AggregateActionBuilder =
             Handler = (fun _ _ -> f >> Seq.singleton >> Success >> Async.returnM)
         } : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TAggregateId, 'TMetadata, 'TBaseEvent> 
 
-    let toChoiceValidator cmd r =
-        if r |> Seq.isEmpty then
-            Success cmd
-        else
-            NonEmptyList.create (r |> Seq.head) (r |> Seq.tail |> List.ofSeq) |> Failure
-
+    /// Relax the signature of a CommandHandler.GetId function to accept `obj` as the command type
     let untypedGetId<'TId,'TCmd,'TState, 'TCommandContext, 'TMetadata, 'TValidatedState, 'TBaseEvent> (sb : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TId, 'TMetadata, 'TBaseEvent>) (context : 'TCommandContext) (cmd:obj) =
         match cmd with
         | :? 'TCmd as cmd ->
             sb.GetId context cmd
         | _ -> failwith <| sprintf "Invalid command %A" (cmd.GetType())
 
-    let uniqueIdBuilder getUniqueId =
+    /// Create a state builder that records all seen unique ids
+    let uniqueIdBuilder (getUniqueId : 'TMetadata -> string option) =
         StateBuilder.Empty "$Eventful::UniqueIdBuilder" Set.empty
         |> StateBuilder.allEventsHandler 
             (fun m -> ()) 
@@ -205,6 +234,8 @@ module AggregateActionBuilder =
                 | None -> s)
         |> StateBuilder.toInterface
 
+    /// Creates an event stream program that writes the given events to the specified stream.
+    /// If the `lastEventNumber` indicates that the stream is a new stream, additionally write the `streamMetadata`.
     let writeEvents stream lastEventNumber streamMetadata events =  eventStream {
         let rawEventToEventStreamEvent (event, metadata) = getEventStreamEvent event metadata
         let! eventStreamEvents = EventStream.mapM rawEventToEventStreamEvent events
@@ -221,7 +252,11 @@ module AggregateActionBuilder =
         return! writeToStream stream expectedVersion eventStreamEvents
     }
 
-    let addStateChangeEvents blockBuilders snapshot stateChangeHandlers events = 
+    /// Expand a list of events to also include any events generated by state changes caused by the events.
+    /// Events generated from the state changes can themselves cause further state change events.
+    /// The events generated from the state change are inserted immediately after the event that triggered the
+    /// state change and processing continues starting from the first generated event.
+    let addStateChangeEvents (blockBuilders : IStateBlockBuilder<'TMetadata, _> list) snapshot stateChangeHandlers (events : LazyList<'TBaseEvent * _>) = 
         let applyEventToSnapshot (event, metadata) snapshot = 
             AggregateStateBuilder.applyToSnapshot blockBuilders () event (snapshot.LastEventNumber + 1) metadata snapshot
 
@@ -242,6 +277,7 @@ module AggregateActionBuilder =
         
         LazyList.unfold generator (snapshot, events)
 
+    /// Determine whether a batch of events contains any event with a unique id that has already been seen before.
     let anyNewUniqueIdsAlreadyExist getUniqueId snapshot events =
         let existingUniqueIds = (uniqueIdBuilder getUniqueId).GetState snapshot.State
         let newUniqueIds = 
@@ -253,15 +289,21 @@ module AggregateActionBuilder =
 
         existingUniqueIds |> Set.intersect newUniqueIds |> Set.isEmpty |> not
         
+    /// Create an event stream program that executes the given handler function
+    /// which takes some handler-specific state and asynchronously produces
+    /// either a sequence of events and metadata or an error.
+    /// If the handler successfully produces events then these events will be
+    /// written to the stream (assuming none of the events have been produced before
+    /// and the expected version from the snapshot is still correct).
     let inline runHandler 
-        getUniqueId
-        streamMetadata
-        blockBuilders
-        stateChangeHandlers
-        streamId 
-        snapshot
-        (commandStateBuilder : IStateBuilder<'TChildState, 'TMetadata, unit>) 
-        f = 
+        getUniqueId (* for determining if an event has been produced before *)
+        streamMetadata (* stream metadata in case this is a new stream *)
+        blockBuilders (* state builders for the full aggregate state, used by the stateChangeHandlers *)
+        stateChangeHandlers (* state change handlers for producing events based on state changes *)
+        streamId (* the name of the stream the events should be written to *)
+        snapshot (* the snapshot of the full aggregate state at the time this handler is executing *)
+        (commandStateBuilder : IStateBuilder<'TChildState, 'TMetadata, unit>) (* the state builder for the handler-specific state *)
+        f (* the handler *) = 
 
         eventStream {
             let commandState = commandStateBuilder.GetState snapshot.State
@@ -307,7 +349,7 @@ module AggregateActionBuilder =
                     }
         }
 
-    let mapValidationFailureToCommandFailure (x : RunFailure<_>) =
+    let mapValidationFailureToCommandFailure (x : RunFailure<_>) : NonEmptyList<CommandFailure> =
         match x with
         | HandlerError x -> 
             (NonEmptyList.map CommandFailure.ofValidationFailure) x
@@ -325,6 +367,8 @@ module AggregateActionBuilder =
             CommandFailure.CommandException (None, ex)
             |> NonEmptyList.singleton 
 
+    /// Repeatedly re-run `handler` with the current state snapshot until
+    /// it no longer returns WrongExpectedVersion (limited to 100 attempts)
     let retryOnWrongVersion streamId stateBuilder handler = 
         let program attempt = eventStream {
             log.RichDebug "Starting attempt {@Attempt}" [|attempt|]
@@ -336,6 +380,7 @@ module AggregateActionBuilder =
         }
         EventStream.retryOnWrongVersion program
 
+    /// Create an event stream program that will execute a commandHandler on a command 
     let handleCommand
         (commandHandler:CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TId, 'TMetadata, 'TBaseEvent>) 
         (aggregateConfiguration : AggregateConfiguration<'TCommandContext,_,_,_>) 
@@ -387,6 +432,7 @@ module AggregateActionBuilder =
                     |> Choice2Of2
             }
         
+    /// Weaken the strongly-typed CommandHandler into an ICommandHandler
     let ToInterface (sb : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TAggregateId, 'TMetadata,'TBaseEvent>) = 
         let cmdType = typeof<'TCmd>
         if cmdType = typeof<obj> then
@@ -404,12 +450,16 @@ module AggregateActionBuilder =
                  }
             }
 
+    /// Create a new CommandHandler from an existing one and a GetId function which takes only the command as a parameter
     let withCmdId (getId : 'TCmd -> 'TId) (builder : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TId, 'TMetadata, 'TBaseEvent>) = 
         { builder with GetId = (fun _ cmd -> getId cmd )}
 
+    /// Weaken the strongly-typed CommandHandler into an ICommandHandler
     let buildCmd (sb : CommandHandler<'TCmd, 'TCommandContext, 'TState, 'TId, 'TMetadata, 'TBaseEvent>) : ICommandHandler<'TId,'TCommandContext,'TMetadata, 'TBaseEvent> = 
         ToInterface sb
 
+    /// Create a new IStateChangeHandler from a handler function.
+    /// The handler function will only be executed if the state produced by the stateBuilder has changed.
     let buildStateChange (stateBuilder : IStateBuilder<'TState,'TMetadata,unit>) (handler : 'TState -> 'TState -> seq<'TBaseEvent * 'TMetadata>) = {
         new IStateChangeHandler<'TMetadata, 'TBaseEvent> with
             member this.AddStateBuilder builders = AggregateStateBuilder.combineHandlers stateBuilder.GetBlockBuilders builders
@@ -447,9 +497,10 @@ module AggregateActionBuilder =
                 |> Async.returnM
     } 
 
+    /// Map an AsyncSeq of event handlers into an AsyncSeq of event stream programs which will execute the handlers.
     let processSequence
         (aggregateConfiguration : AggregateConfiguration<'TEventContext,'TId,'TMetadata, 'TBaseEvent>)
-        (stateBuilder : IStateBuilder<'TState,_,_>)
+        (stateBuilder : IStateBuilder<'TState,_,_>)  (* state builder for the state required by the handlers *)
         (event: PersistedEvent<'TMetadata>)
         (eventContext : 'TEventContext)  
         (handlers : AsyncSeq<MultiEventRun<'TId,'TMetadata,'TState,'TBaseEvent>>) 
@@ -482,6 +533,7 @@ module AggregateActionBuilder =
             }
         )
 
+    /// Create an IEventHandler from a state builder and handler function
     let getEventInterfaceForOnEvent<'TOnEvent, 'TId, 'TState, 'TMetadata, 'TCommandContext, 'TEventContext,'TBaseEvent,'TKey when 'TId : equality> (stateBuilder: IStateBuilder<_,_,'TKey>) (fId : ('TOnEvent * 'TEventContext) -> AsyncSeq<MultiEventRun<'TId,'TMetadata,'TState,'TBaseEvent>>) = 
         let evtType = typeof<'TOnEvent>
         if evtType = typeof<obj> then
@@ -507,20 +559,25 @@ module AggregateActionBuilder =
     let linkEvent<'TLinkEvent,'TId,'TCommandContext,'TEventContext,'TMetadata, 'TBaseEvent when 'TId : equality> fId (metadata : metadataBuilder<'TMetadata>) = 
         getEventInterfaceForLink<'TLinkEvent,'TId,'TMetadata,'TCommandContext,'TEventContext, 'TBaseEvent> fId metadata
 
+    /// Create an IEventHandler from a state builder and handler function that may write new events to multiple aggregate instances of the same aggregate type.
+    /// The aggregate instances are calculated asynchronously.
     let onEventMultiAsync<'TOnEvent,'TEventState,'TId, 'TMetadata, 'TCommandContext,'TEventContext,'TBaseEvent,'TKey when 'TId : equality> 
         (stateBuilder : IStateBuilder<'TEventState, 'TMetadata, 'TKey>)  
         (fId : ('TOnEvent * 'TEventContext) -> AsyncSeq<MultiEventRun<'TId,'TMetadata,'TEventState,'TBaseEvent>>) = 
         getEventInterfaceForOnEvent<'TOnEvent,'TId,'TEventState, 'TMetadata, 'TCommandContext,'TEventContext,'TBaseEvent,'TKey> stateBuilder fId
 
+    /// Create an IEventHandler from a state builder and handler function that may write new events to multiple aggregate instances of the same aggregate type.
+    /// The aggregate instances are calculated synchronously.
     let onEventMulti<'TOnEvent,'TEventState,'TId, 'TMetadata, 'TCommandContext,'TEventContext,'TBaseEvent,'TKey when 'TId : equality> 
         (stateBuilder : IStateBuilder<'TEventState, 'TMetadata, 'TKey>)  
         (fId : ('TOnEvent * 'TEventContext) -> seq<MultiEventRun<'TId,'TMetadata,'TEventState,'TBaseEvent>>) = 
         onEventMultiAsync stateBuilder (fId >> AsyncSeq.ofSeq)
 
+    /// Create an IEventHandler from a state builder and handler function which writes new events to a single aggregate instance
     let onEvent<'TOnEvent,'TEventState,'TId,'TMetadata,'TEventContext,'TBaseEvent, 'TKey when 'TId : equality> 
-        (fId : 'TOnEvent -> 'TEventContext -> 'TId) 
-        (stateBuilder : IStateBuilder<'TEventState, 'TMetadata, 'TKey>) 
-        (runEvent : 'TEventState -> 'TOnEvent -> 'TEventContext -> seq<'TBaseEvent * 'TMetadata>) = 
+        (fId : 'TOnEvent -> 'TEventContext -> 'TId) (* get the aggregate instance id to write the new events to *)
+        (stateBuilder : IStateBuilder<'TEventState, 'TMetadata, 'TKey>) (* state builder for state required by the handler *)
+        (runEvent : 'TEventState -> 'TOnEvent -> 'TEventContext -> seq<'TBaseEvent * 'TMetadata>) (* handler *) = 
         
         let runEvent' = fun evt eventCtx state ->
             runEvent state evt eventCtx
@@ -533,6 +590,7 @@ module AggregateActionBuilder =
             )
         onEventMulti stateBuilder handler
 
+    /// Create an IMultiCommandEventHandler where the handler is a multi-command program
     let multiCommandEventHandler (f : 'TOnEvent -> 'TEventContext -> MultiCommandProgram<unit,'TCommandContext,CommandResult<'TBaseEvent,'TMetadata>>) =
         {
             new IMultiCommandEventHandler<'TMetadata, 'TEventContext,'TCommandContext, 'TBaseEvent> with 
@@ -543,18 +601,36 @@ module AggregateActionBuilder =
                     f typedEvent eventContext
         }
 
+/// The primary definition of a single aggregate
 type AggregateDefinition<'TAggregateId, 'TCommandContext, 'TEventContext, 'TMetadata,'TBaseEvent when 'TAggregateId : equality> = {
+    /// Get a unique id from the event metadata.
+    /// When writing a batch of events to the stream, they will only be writen if no unique id in the batch has been seen before.
     GetUniqueId : 'TMetadata -> string option
+
+    /// Get the aggregate instance stream name from the command context and aggregate id
     GetCommandStreamName : 'TCommandContext -> 'TAggregateId -> string
+
+    /// Get the aggregate instance stream name from the event context and aggregate id
     GetEventStreamName : 'TEventContext -> 'TAggregateId -> string
+
+    /// The set of command, event and state change handlers for the aggregate
     Handlers : AggregateHandlers<'TAggregateId, 'TCommandContext, 'TEventContext, 'TMetadata, 'TBaseEvent>
+
+    /// A unique name identifying the aggregate
     AggregateType : string
+
+    /// The wakeup handler for the aggregate
     Wakeup : IWakeupHandler<'TAggregateId,'TCommandContext, 'TMetadata, 'TBaseEvent> option
+
+    /// Configuration options to be applied to aggregate instance streams
     StreamMetadata : EventStreamMetadata
+
+    /// Extra state builders to be added to the set of state to be projected for the aggregate
     ExtraStateBuilders : IStateBlockBuilder<'TMetadata, unit> list
 }
 
 module Aggregate = 
+    /// Create a new AggregateDefinition with the specified AggregateHandlers
     let aggregateDefinitionFromHandlers
         (aggregateType : string)
         (getUniqueId : 'TMetadata -> string option)
@@ -572,6 +648,7 @@ module Aggregate =
                 ExtraStateBuilders = []
             }
 
+    /// Create a new AggregateDefinition with specified command and event handlers
     let toAggregateDefinition<'TEvents, 'TAggregateId, 'TCommandContext, 'TEventContext, 'TMetadata,'TBaseEvent when 'TAggregateId : equality>
         (aggregateType : string)
         (getUniqueId : 'TMetadata -> string option)
@@ -593,12 +670,15 @@ module Aggregate =
                 getEventStreamName
                 handlers
 
+    /// Add extra state builders to an AggregateDefinition.
+    /// These state builders will have their state added to the aggregate's full state snapshot
     let withExtraStateBuilders
         (extraStateBuilders : IStateBlockBuilder<'TMetadata, unit> list) 
         (aggregateDefinition : AggregateDefinition<_,_,_,'TMetadata,'TBaseEvent>) =
 
         { aggregateDefinition with ExtraStateBuilders = extraStateBuilders }
 
+    /// Add a wakeup handler to an AggregateDefinition
     let withWakeup 
         (wakeupFold : WakeupFold<'TMetadata>) 
         (stateBuilder : IStateBuilder<'T,'TMetadata, unit>) 
@@ -646,7 +726,8 @@ module Aggregate =
         }
         { aggregateDefinition with Wakeup = Some wakeup }
 
+    /// Add stream metadata to an AggregateDefinition
     let withStreamMetadata 
         (streamMetadata : EventStreamMetadata) 
         (aggregateDefinition : AggregateDefinition<_,_,_,'TMetadata,'TBaseEvent>) =
-        { aggregateDefinition with StreamMetadata = streamMetadata } 
+        { aggregateDefinition with StreamMetadata = streamMetadata }
