@@ -144,7 +144,7 @@ module EventStream =
         ReadFromStream (streamName, startEventNumber, id) |> liftF
 
     /// Create an event stream program that outputs the current state snapshot for the `streamName` stream.
-    /// `typeMap` maps event names to event types.
+    /// `typeMap` maps state block names names to state types.
     let readSnapshot streamName typeMap = 
         ReadSnapshot (streamName, typeMap, id) |> liftF
 

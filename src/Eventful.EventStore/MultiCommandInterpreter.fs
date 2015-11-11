@@ -8,6 +8,8 @@ open FSharpx
 module MultiCommandInterpreter = 
     let log = createLogger "Eventful.EventStore.MultiCommandInterpreter"
 
+    /// Execute a multi-command program, invoking `runCommand` for any
+    /// RunCommand statement encountered.
     let interpret 
         (prog : MultiCommandProgram<'TResult,'TCommandContext,CommandResult<'TBaseType,'TMetadata>>)
         (runCommand : obj -> 'TCommandContext -> (Async<CommandResult<'TBaseType,'TMetadata>>))

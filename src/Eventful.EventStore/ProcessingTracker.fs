@@ -6,6 +6,7 @@ open FSharp.Data
 open EventStore.ClientAPI
 open Eventful
 
+/// Functions for storing the current eventstream processing position inside event store
 module ProcessingTracker = 
     let private deserializePosition (data : byte[]) =
         let body = 
