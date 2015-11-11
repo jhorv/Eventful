@@ -10,16 +10,31 @@ open Metrics
 open FSharpx
 open FSharpx.Functional
 
+/// A projector that turns selected messages (events) into actions.
 type IProjector<'TMessage, 'TContext, 'TAction> = 
-    abstract member Compare : obj -> obj -> int
+    /// Determine the keys (e.g. document ids) that this message applies to.
+    /// ProcessEvents will be called with this message for each key returned
+    /// (although the call for a particular key may be batched with other messages
+    /// if more messages are awaiting processing for the same key).
     abstract member MatchingKeys : 'TMessage -> obj seq
-    abstract member ProcessEvents : 'TContext -> obj -> 'TMessage seq -> Async<'TAction seq * Async<unit>>
 
+    /// For a batch of messages matching the given key returned by MatchingKeys,
+    /// asynchronously calcuate the set of projector actions to perform,
+    /// along with an Async to be executed once the actions have been performed.
+    /// 'TContext provides additional projector-specific data.
+    abstract member ProcessEvents : 'TContext -> (* key *) obj -> 'TMessage seq -> Async<'TAction seq * Async<unit>>
+
+    /// Determine the ordering two keys.
+    /// TODO: We actually only care about the equality, not the ordering. Fix the signature to match this.
+    abstract member Compare : obj -> obj -> int
+
+/// A projector which has any projector-specific context already embedded.
 type BulkProjectorWithContext<'TMessage, 'TAction> =
     { MatchingKeys : 'TMessage -> obj seq
       ProcessEvents : obj -> 'TMessage seq -> Async<'TAction seq * Async<unit>>
       Compare : obj -> obj -> int }
 
+/// A projector where ordering of keys is determined by the given key type.
 type Projector<'TKey, 'TMessage, 'TContext, 'TAction when 'TKey : comparison> =
     { MatchingKeys : 'TMessage -> 'TKey seq
       ProcessEvents : 'TContext -> 'TKey -> 'TMessage seq -> Async<'TAction seq * Async<unit>> }
@@ -39,6 +54,8 @@ type Projector<'TKey, 'TMessage, 'TContext, 'TAction when 'TKey : comparison> =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module BulkProjector =
+    /// Find all matching keys for the given message (event) along with the index of the
+    /// corresponding projector
     let allMatchingKeys projectors event =
         projectors
         |> Seq.mapi tuple2
@@ -46,6 +63,7 @@ module BulkProjector =
             projector.MatchingKeys event
             |> Seq.map (fun key -> (event, (key, projectorIndex))))
 
+    /// Convert the given IProjectors into BulkProjectorWithContexts by embeddeding the given context
     let projectorsWithContext projectors context =
         projectors
         |> Seq.map (fun (projector : IProjector<_, _, _>) ->
@@ -53,10 +71,12 @@ module BulkProjector =
               ProcessEvents = projector.ProcessEvents context
               Compare = projector.Compare })
 
+    /// Convert an unstarted Task into an Async
     let funcTaskToAsync (func : Func<Task>) =
         if func = null then async.Zero()
         else async { return! func.Invoke() |> voidTaskAsAsync }
 
+    /// Create a projector from the given delegates (for easier C# interop)
     let createProjector<'TKey, 'TMessage, 'TContext, 'TAction when 'TKey : comparison> (matchingKeys : Func<'TMessage, 'TKey seq>) (processEvents : Func<'TContext, 'TKey, 'TMessage seq, Task<'TAction seq * Func<Task>>>) =
         { MatchingKeys = fun message -> matchingKeys.Invoke(message)
           ProcessEvents = fun context key messages ->
@@ -64,6 +84,8 @@ module BulkProjector =
             |> Async.AwaitTask
             |> Async.map (fun (actions, onComplete) -> (actions, funcTaskToAsync onComplete)) }
 
+/// A projector composed from individual projectors which also tracks the most recent
+/// position in the event stream where all preceeding events have been projected.
 type BulkProjector<'TMessage, 'TAction when 'TMessage :> IBulkMessage>
     (
         projectorName : string,

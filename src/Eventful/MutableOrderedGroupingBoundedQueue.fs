@@ -21,6 +21,7 @@ type internal MutableOrderedGroupingBoundedQueueState<'TGroup, 'TItem>
     ) =
     // normal .NET dictionary for performance
     // very mutable
+    // TODO: We don't seem to actually require this to be a *sorted* dictionary
     let groupItems = 
         match groupComparer with
         | Some c -> new System.Collections.Generic.SortedDictionary<'TGroup, GroupEntry<'TItem>>(c)
