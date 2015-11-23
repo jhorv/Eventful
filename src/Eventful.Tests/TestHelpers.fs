@@ -81,7 +81,7 @@ module TestHelpers =
 
         Arb.fromGenShrink (gen, shrink)
 
-    let assertTrueWithin maxWaitMilliseconds error f =
+    let assertTrueWithin maxWaitMilliseconds error (f : unit -> bool) =
         let sleepTime = 5
 
         let rec loop remaining =

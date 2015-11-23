@@ -9,7 +9,7 @@ open Eventful
 
 module InMemoryRavenRunner = 
     let logger = createLogger "Eventful.Tests.Integration.InMemoryRavenRunner"
-    type RavenAccess =     
+    type RavenAccess =
         { Process : Process
           HttpPort : int }
         interface IDisposable with
@@ -18,7 +18,12 @@ module InMemoryRavenRunner =
              this.Process.WaitForExit()
              this.Process.Dispose()
 
-    let private executableAbsolutePath = Path.Combine(IntegrationTests.buildDirectoryPath, "RavenDb\Server\Raven.Server.exe")
+    //let private executableAbsolutePath = 
+    let executableAbsolutePath =
+        let configPath = System.Configuration.ConfigurationManager.AppSettings.["RavenDb Executable Absolute Path"]
+        if not (String.IsNullOrWhiteSpace(configPath)) then configPath
+        else Path.Combine(IntegrationTests.buildDirectoryPath, "RavenDb\Server\Raven.Server.exe")
+
 
     let startNewProcess () =
         let ravenPort = IntegrationTests.findFreeTcpPort()

@@ -5,7 +5,7 @@ open Eventful
 open Eventful.Testing
 open FSharpx
 open FSharpx.Collections
-
+open FSharpx.Functional.Prelude     // for konst
 open Xunit
 open Swensen.Unquote
 open FsCheck.Xunit
@@ -30,7 +30,7 @@ module StreamMetadataTests =
         yield typeof<FooEvent>
     }
 
-    let fooHandlers streamMetadata : AggregateDefinition<Guid,_,_,_,_>  =    
+    let fooHandlers streamMetadata : AggregateDefinition<Guid,_,_,_,_>  =
         let cmdHandlers = seq {
             yield 
                 cmdHandler
@@ -66,7 +66,7 @@ module StreamMetadataTests =
             |> TestSystem.runCommand { FooCmd.Id = fooId } (Guid.NewGuid())
             |> TestSystem.getStreamMetadata "Foo"
 
-        result =? Some (Vector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
+        result =! Some (PersistentVector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -78,7 +78,7 @@ module StreamMetadataTests =
             |> TestSystem.runCommand { FooCmd.Id = fooId } (Guid.NewGuid())
             |> TestSystem.getStreamMetadata "Foo"
 
-        result =? Some (Vector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
+        result =! Some (PersistentVector.singleton { EventStreamMetadata.Default with MaxCount = Some 1 })
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -89,7 +89,7 @@ module StreamMetadataTests =
             |> TestSystem.runCommand { FooCmd.Id = fooId } (Guid.NewGuid())
             |> TestSystem.getStreamMetadata "Foo"
 
-        result =? None
+        result =! None
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -104,7 +104,7 @@ module StreamMetadataTests =
             |> Seq.fold (fun system command -> system |> TestSystem.runCommand command (Guid.NewGuid())) emptySystem
         
         let eventShouldBeDropped = system.AllEvents |> TestEventStore.tryGetEvent "Foo" (eventCount - maxCount - 1)
-        eventShouldBeDropped =? None
+        eventShouldBeDropped =! None
 
         let eventShouldNotBeDropped = system.AllEvents |> TestEventStore.tryGetEvent "Foo" (eventCount - maxCount)
-        eventShouldNotBeDropped.IsSome =? true
+        eventShouldNotBeDropped.IsSome =! true

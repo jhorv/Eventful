@@ -2,8 +2,9 @@
 
 open Eventful
 open FSharpx
+open FSharpx.Functional.Prelude     // for 'konst'
 open BookLibrary.Aggregates
-open FSharp.Control.AsyncSeq
+open FSharp.Control
 
 [<CLIMutable>]
 type AddBookCopyCommand = {
@@ -84,7 +85,7 @@ module BooksCopiesWebApi =
 
     let config system =
         choose [
-            url "/api/bookcopies" >>= choose
+            path "/api/bookcopies" >>= choose
                 [ 
                     POST >>= commandHandler system addHandler
                 ]

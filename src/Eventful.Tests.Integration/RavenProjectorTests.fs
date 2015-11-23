@@ -511,8 +511,8 @@ module RavenProjectorTests =
 
             // !itemsComplete |> should equal totalEvents
 
-            let! docs = session.Advanced.LoadStartingWithAsync<MyCountingDoc>("MyCountingDocs/", 0, 1024) |> Async.AwaitTask
-            let! permDocs = session.Advanced.LoadStartingWithAsync<MyPermissionDoc>("PermissionDocs/",0, 1024) |> Async.AwaitTask
+            let! docs = session.Advanced.LoadStartingWithAsync<MyCountingDoc>("MyCountingDocs/", start = 0, pageSize = 1024) |> Async.AwaitTask
+            let! permDocs = session.Advanced.LoadStartingWithAsync<MyPermissionDoc>("PermissionDocs/", start = 0, pageSize = 1024) |> Async.AwaitTask
             let permDocs = 
                 permDocs
                 |> Seq.map (fun doc -> (doc.Id, doc.Writes))

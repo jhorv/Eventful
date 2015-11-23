@@ -1,41 +1,39 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>eb1d6947-29b2-4b74-ae9c-d36ac7778c7e</ProjectGuid>
+    <ProjectGuid>1c49fe77-d3f1-45b4-abfd-9b6e2488c75e</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>Eventful.Tests.Integration</RootNamespace>
     <AssemblyName>Eventful.Tests.Integration</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <TargetFSharpCoreVersion>4.3.1.0</TargetFSharpCoreVersion>
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFSharpCoreVersion>4.4.0.0</TargetFSharpCoreVersion>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Name>Eventful.Tests.Integration</Name>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\</SolutionDir>
-    <RestorePackages>true</RestorePackages>
-    <NuGetPackageImportStamp>c65a0d58</NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <Tailcalls>false</Tailcalls>
-    <OutputPath>..\..\build\Debug\</OutputPath>
+    <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>..\..\build\Debug\Eventful.Tests.Integration.XML</DocumentationFile>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <WarningsAsErrors />
+    <DocumentationFile>bin\Debug\Eventful.Tests.Integration.XML</DocumentationFile>
+    <NoWarn>3186</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
-    <OutputPath>..\..\build\Release\</OutputPath>
+    <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>..\..\build\Release\Eventful.Tests.Integration.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\Eventful.Tests.Integration.XML</DocumentationFile>
+    <NoWarn>3186</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -53,14 +51,8 @@
     </Otherwise>
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
-  <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('$(SolutionDir)\.nuget\NuGet.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\.nuget\NuGet.targets'))" />
-  </Target>
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="IntegrationTests.fs" />
     <Compile Include="InMemoryRavenRunner.fs" />
     <Compile Include="BookLibraryRunner.fs" />
@@ -78,157 +70,156 @@
     <Compile Include="SnapshotProjectorTests.fs" />
     <Compile Include="Neo4jOperationTests.fs" />
     <Compile Include="PerformanceSuiteTests.fs" />
-    <None Include="app.config" />
+    <Content Include="App.config" />
     <Content Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\vendor\Neo4jClient\Neo4jClient\Neo4jClient.csproj">
-      <Name>Neo4jClient</Name>
-      <Project>{343b9889-6ddf-4474-a1ec-05508a652e5a}</Project>
+    <Reference Include="Argu">
+      <HintPath>..\..\packages\Argu.1.1.2\lib\net40\Argu.dll</HintPath>
       <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\BookLibrary\BookLibrary.fsproj">
-      <Name>BookLibrary</Name>
-      <Project>{fe210063-72a2-4653-b299-26a088a12c6e}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Eventful.CsTests\Eventful.CsTests.csproj">
-      <Name>Eventful.CsTests</Name>
-      <Project>{8dcb39a0-a882-486a-b147-fc4b44a42f0a}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Eventful.Neo4j\Eventful.Neo4j.fsproj">
-      <Name>Eventful.Neo4j</Name>
-      <Project>{01019b14-edad-4754-ba5b-7c49d1d63326}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Eventful.Testing\Eventful.Testing.fsproj">
-      <Name>Eventful.Testing</Name>
-      <Project>{7c47cd17-5bd2-47fd-9361-80d7ced2dc71}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Eventful.Tests\Eventful.Tests.fsproj">
-      <Name>Eventful.Tests</Name>
-      <Project>{dfbaa651-9312-47e2-aec7-04c8fe48e0b0}</Project>
-      <Private>True</Private>
-    </ProjectReference>
+    </Reference>
     <Reference Include="EventStore.ClientAPI">
-      <HintPath>..\packages\EventStore.Client.3.0.1\lib\net40\EventStore.ClientAPI.dll</HintPath>
+      <HintPath>..\..\packages\EventStore.Client.3.3.1\lib\net40\EventStore.ClientAPI.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="FsCheck">
-      <HintPath>..\packages\FsCheck.1.0.1\lib\net45\FsCheck.dll</HintPath>
+    <Reference Include="FSharp.Control.AsyncSeq">
+      <HintPath>..\..\packages\FSharp.Control.AsyncSeq.2.0.2\lib\net45\FSharp.Control.AsyncSeq.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="FsCheck.Xunit">
-      <HintPath>..\packages\FsCheck.Xunit.1.0.1\lib\net45\FsCheck.Xunit.dll</HintPath>
+    <Reference Include="FSharp.Core">
+      <HintPath>..\..\packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="FSharp.Data">
-      <HintPath>..\packages\FSharp.Data.2.1.1\lib\net40\FSharp.Data.dll</HintPath>
+      <HintPath>..\..\packages\FSharp.Data.2.2.5\lib\net40\FSharp.Data.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="FSharpx.Async">
+      <HintPath>..\..\packages\FSharpx.Async.1.12.0\lib\net40\FSharpx.Async.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="FSharpx.Collections">
-      <HintPath>..\packages\FSharpx.Collections.1.9.4\lib\net35\FSharpx.Collections.dll</HintPath>
+      <HintPath>..\..\packages\FSharpx.Collections.1.13.4\lib\net40\FSharpx.Collections.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="FSharpx.Core">
-      <HintPath>..\packages\FSharpx.Core.1.8.41\lib\40\FSharpx.Core.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FsUnit.CustomMatchers">
-      <HintPath>..\packages\FsUnit.xUnit.1.3.0.1\Lib\net40\FsUnit.CustomMatchers.dll</HintPath>
+    <Reference Include="FSharpx.Extras">
+      <HintPath>..\..\packages\FSharpx.Extras.1.10.3\lib\40\FSharpx.Extras.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="FsUnit.Xunit">
-      <HintPath>..\packages\FsUnit.xUnit.1.3.0.1\Lib\net40\FsUnit.Xunit.dll</HintPath>
+      <HintPath>..\..\packages\FsUnit.xUnit.1.4.0.0\lib\net45\FsUnit.Xunit.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="HttpClient">
-      <HintPath>..\packages\Http.fs.1.4.0\lib\net40\HttpClient.dll</HintPath>
+      <HintPath>..\..\packages\Http.fs.1.5.1\lib\net40\HttpClient.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Metrics">
-      <HintPath>..\packages\Metrics.NET.0.2.6\lib\net45\Metrics.dll</HintPath>
+      <HintPath>..\..\packages\Metrics.NET.0.3.3-pre\lib\net45\Metrics.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <Reference Include="Neo4jClient">
+      <HintPath>..\..\packages\Neo4jClient.1.1.0.14\lib\net45\Neo4jClient.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\packages\Newtonsoft.Json.6.0.6\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\packages\Newtonsoft.Json.7.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="NHamcrest">
-      <HintPath>..\packages\FsUnit.xUnit.1.3.0.1\Lib\net40\NHamcrest.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="NLog">
-      <HintPath>..\packages\NLog.3.0.0.0\lib\net45\NLog.dll</HintPath>
+      <HintPath>..\..\packages\FsUnit.xUnit.1.4.0.0\lib\net45\NHamcrest.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Raven.Abstractions">
-      <HintPath>..\packages\RavenDB.Client.2.5.2935\lib\net45\Raven.Abstractions.dll</HintPath>
+      <HintPath>..\..\packages\RavenDB.Client.3.0.30000\lib\net45\Raven.Abstractions.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Raven.Client.Lightweight">
-      <HintPath>..\packages\RavenDB.Client.2.5.2935\lib\net45\Raven.Client.Lightweight.dll</HintPath>
+      <HintPath>..\..\packages\RavenDB.Client.3.0.30000\lib\net45\Raven.Client.Lightweight.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Serilog">
-      <HintPath>..\packages\Serilog.1.5.7\lib\net45\Serilog.dll</HintPath>
+      <HintPath>..\..\packages\Serilog.1.5.14\lib\net45\Serilog.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Serilog.FullNetFx">
-      <HintPath>..\packages\Serilog.1.5.7\lib\net45\Serilog.FullNetFx.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Serilog.Sinks.NLog">
-      <HintPath>..\packages\Serilog.Sinks.NLog.1.4.76\lib\net45\Serilog.Sinks.NLog.dll</HintPath>
+      <HintPath>..\..\packages\Serilog.1.5.14\lib\net45\Serilog.FullNetFx.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Serilog.Sinks.Seq">
-      <HintPath>..\packages\Serilog.Sinks.Seq.1.4.76\lib\net45\Serilog.Sinks.Seq.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="suave">
-      <HintPath>..\packages\Suave.0.18.0\lib\suave.dll</HintPath>
+      <HintPath>..\..\packages\Serilog.Sinks.Seq.1.5.17\lib\net45\Serilog.Sinks.Seq.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Net.Http.WebRequest" />
     <Reference Include="System.Numerics" />
-    <Reference Include="System.Runtime.Caching" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="UnionArgParser">
-      <HintPath>..\packages\UnionArgParser.0.8.2\lib\net40\UnionArgParser.dll</HintPath>
+    <ProjectReference Include="..\BookLibrary\BookLibrary.fsproj">
+      <Name>BookLibrary</Name>
+      <Project>{c22b3ebb-092a-467c-a0e4-ef7e6a0c74f1}</Project>
       <Private>True</Private>
-    </Reference>
-    <Reference Include="Unquote">
-      <HintPath>..\packages\Unquote.2.2.2\lib\net40\Unquote.dll</HintPath>
+    </ProjectReference>
+    <ProjectReference Include="..\Eventful.CsTests\Eventful.CsTests.csproj">
+      <Name>Eventful.CsTests</Name>
+      <Project>{0c310e55-0cb9-4e41-9e88-837fed010bf1}</Project>
       <Private>True</Private>
-    </Reference>
-    <Reference Include="xunit">
-      <HintPath>..\packages\xunit.1.9.2\lib\net20\xunit.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
+    </ProjectReference>
     <ProjectReference Include="..\Eventful.EventStore\Eventful.EventStore.fsproj">
       <Name>Eventful.EventStore</Name>
-      <Project>{ae510f33-d499-41ad-8ea6-6961ad7e2dfe}</Project>
+      <Project>{86de5b3d-d0a1-4702-8014-c125d46e6b55}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Eventful.Neo4j\Eventful.Neo4j.fsproj">
+      <Name>Eventful.Neo4j</Name>
+      <Project>{a1e132f9-a8ae-4e0a-b3d2-b3525f0ea1fd}</Project>
       <Private>True</Private>
     </ProjectReference>
     <ProjectReference Include="..\Eventful.RavenDb\Eventful.RavenDb.fsproj">
       <Name>Eventful.RavenDb</Name>
-      <Project>{639b7247-67ae-4a1f-8b09-28bcf23bce20}</Project>
+      <Project>{61a9deba-2a58-4dcd-b68c-50c39c0a45a0}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Eventful.Testing\Eventful.Testing.fsproj">
+      <Name>Eventful.Testing</Name>
+      <Project>{c466ece3-cad1-4931-bc18-55e9e58256d9}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Eventful.Tests\Eventful.Tests.fsproj">
+      <Name>Eventful.Tests</Name>
+      <Project>{fb6056f9-01b7-4dc7-a361-4e1a40926dc7}</Project>
       <Private>True</Private>
     </ProjectReference>
     <ProjectReference Include="..\Eventful\Eventful.fsproj">
       <Name>Eventful</Name>
-      <Project>{4c150478-a9fc-4010-9929-20312856ceaf}</Project>
+      <Project>{31dedd5b-20ab-49c8-9483-4e53303f4629}</Project>
       <Private>True</Private>
     </ProjectReference>
+    <Reference Include="System.Runtime.Caching" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="Unquote">
+      <HintPath>..\..\packages\Unquote.3.1.0\lib\net45\Unquote.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="xunit.abstractions">
+      <HintPath>..\..\packages\xunit.abstractions.2.0.0\lib\net35\xunit.abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="xunit.assert">
+      <HintPath>..\..\packages\xunit.assert.2.1.0\lib\dotnet\xunit.assert.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="xunit.core">
+      <HintPath>..\..\packages\xunit.extensibility.core.2.1.0\lib\dotnet\xunit.core.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="xunit.execution.desktop">
+      <HintPath>..\..\packages\xunit.extensibility.execution.2.1.0\lib\net45\xunit.execution.desktop.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

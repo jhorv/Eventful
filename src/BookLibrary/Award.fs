@@ -60,7 +60,7 @@ module AwardsWebApi =
 
     let config system =
         choose [
-            url "/api/awards" >>= choose
+            path "/api/awards" >>= choose
                 [ 
                     POST >>= commandHandler system addHandler
                 ]

@@ -151,7 +151,7 @@ module SnapshotProjectorTests =
 
         use dbCommands = documentStore.AsyncDatabaseCommands.ForDatabase(RavenProjectorTests.testDatabase)
 
-        do! dbCommands.DeleteDocumentAsync stateDocumentKey 
+        do! dbCommands.DeleteAsync (stateDocumentKey, null)
             |> Async.AwaitIAsyncResult
             |> Async.Ignore
 
@@ -290,7 +290,7 @@ module SnapshotProjectorTests =
             |> AsyncSeq.map (fun (_,aggregateType,_) -> aggregateType)
             |> AsyncSeq.toBlockingSeq
             |> Seq.head
-            =? aggregateType 
+            =! aggregateType 
         }
         |> Async.StartAsTask
 
@@ -357,6 +357,6 @@ module SnapshotProjectorTests =
             do! runEvents events
 
             let! aggregateState = getAggregateState
-            aggregateState.NextWakeup =? (Some (notifyTime |> UtcDateTime.fromDateTime))
+            aggregateState.NextWakeup =! (Some (notifyTime |> UtcDateTime.fromDateTime))
         }
         |> Async.StartAsTask

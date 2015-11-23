@@ -38,7 +38,7 @@ let main argv =
         let ravenConfig = applicationConfig.Raven
         Console.WriteLine "Creating Raven Database"
         let documentStore = SetupHelpers.buildDocumentStore ravenConfig
-        documentStore.DatabaseCommands.EnsureDatabaseExists(ravenConfig.Database)
+        documentStore.DatabaseCommands.GlobalAdmin.EnsureDatabaseExists(ravenConfig.Database)
         let definition = Eventful.Raven.AggregateStatePersistence.wakeupIndex()
         documentStore.DatabaseCommands.ForDatabase(ravenConfig.Database).PutIndex(definition.Name, definition, true) |> ignore
     else

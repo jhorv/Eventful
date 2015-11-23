@@ -1,8 +1,8 @@
 ﻿namespace Eventful.Testing
 
 open Eventful
-open FsCheck
-open Swensen.Unquote
+//open FsCheck
+//open Swensen.Unquote
 
 module ConfigurationValidation = 
     // will be a huge to find errors in the eventful configuration

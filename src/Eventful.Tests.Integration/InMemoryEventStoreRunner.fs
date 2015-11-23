@@ -9,7 +9,7 @@ open EventStore.ClientAPI
 module InMemoryEventStoreRunner =
     let logger = createLogger "Eventful.Tests.Integration.InMemoryEventStoreRunner"
 
-    type EventStoreAccess =     
+    type EventStoreAccess =
         { Process : Process
           Connection: IEventStoreConnection
           TcpPort : int
@@ -26,7 +26,11 @@ module InMemoryEventStoreRunner =
              this.Process.Dispose()
 
 
-    let clusterNodeAbsolutePath = Path.Combine(IntegrationTests.buildDirectoryPath, "EventStore3\EventStore.ClusterNode.exe")
+    let clusterNodeAbsolutePath =
+        let configPath = System.Configuration.ConfigurationManager.AppSettings.["EventStore Executable Absolute Path"]
+        if not (String.IsNullOrWhiteSpace(configPath)) then configPath
+        else Path.Combine(IntegrationTests.buildDirectoryPath, "EventStore3\EventStore.ClusterNode.exe")
+
     let clusterNodeProcessName = "EventStore.ClusterNode"
 
     let startNewProcess () =

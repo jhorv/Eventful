@@ -4,7 +4,7 @@ open System
 open Eventful
 open Eventful.Testing
 open FSharpx
-
+open FSharpx.Functional.Prelude     // for konst
 open Xunit
 open FsUnit.Xunit
 open Swensen.Unquote
@@ -111,7 +111,7 @@ module WakeupTests =
             afterRun.EvaluateState streamName () wakeupTimeBuilder
             |> Option.map UtcDateTime.fromDateTime
 
-        actualTimeRun =? Some wakeupTime
+        actualTimeRun =! Some wakeupTime
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -132,7 +132,7 @@ module WakeupTests =
             afterRun.EvaluateState streamName () wakeupTimeBuilder
             |> Option.map UtcDateTime.fromDateTime
 
-        actualTimeRun =? None
+        actualTimeRun =! None
 
     [<Fact>]
     [<Trait("category", "unit")>]

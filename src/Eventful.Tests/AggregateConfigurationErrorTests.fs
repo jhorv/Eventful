@@ -13,8 +13,8 @@ open Eventful.Validation
 
 open FSharpx
 open FSharpx.Collections
-
 open FSharpx.Choice
+open FSharpx.Functional.Prelude     // for konst
 open FSharpx.Validation
 
 type TestId = {

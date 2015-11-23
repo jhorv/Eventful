@@ -23,6 +23,7 @@ module RavenDbPlay =
 
         use store = new DocumentStore(Url = "http://localhost:8080")
         store.Initialize() |> ignore
+        store.DatabaseCommands.GlobalAdmin.EnsureDatabaseExists("BulkTestDb")
 
         let personJson = RavenJObject.FromObject({ FirstName = "Andrew"; LastName = "Browne"; Age = 31; Description = "Some boring statement"})
         let metadata = new RavenJObject()

@@ -8,14 +8,15 @@ open Suave.Http.Applicatives
 open Suave.Http.Successful
 open Suave.Http.RequestErrors
 open Suave.Http
+open Suave.Utils
 open Raven.Client.Connection.Async
 open Raven.Json.Linq
 
 module FileWebApi = 
-    let saveFile (db : IAsyncDatabaseCommands) (file : HttpUpload) (c : HttpContext) : SuaveTask<HttpContext> = async {
+    let saveFile (db : IAsyncDatabaseCommands) (file : HttpUpload) (c : HttpContext) : Async<HttpContext option> = async {
         let fileId = System.Guid.NewGuid()
         let key = sprintf "files/%A" fileId
-        let fileData = System.IO.File.ReadAllText(file.Path) // hopefully not too big!
+        let fileData = System.IO.File.ReadAllText(file.tempFilePath) // hopefully not too big!
         let body = RavenJObject.Parse(fileData)
         let metadata = new RavenJObject()
         metadata.Add("Raven-Entity-Name", new RavenJValue("Files"))
@@ -53,6 +54,6 @@ module FileWebApi =
         ]
 
     let config dbCommands =
-        url "/api/files" 
+        path "/api/files" 
         >>= POST 
         >>= singleFile (saveFile dbCommands)

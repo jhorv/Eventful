@@ -120,8 +120,8 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
 
             let suaveLogger = new SuaveEventfulLogger(Serilog.Log.Logger.ForContext("SourceContext","Suave"))
             let suaveConfig = 
-                { default_config with 
-                   Types.SuaveConfig.bindings = [Types.HttpBinding.Create (Types.Protocol.HTTP, webAddress.ToString(), webConfig.Port)] 
+                { defaultConfig with 
+                   Types.SuaveConfig.bindings = [Types.HttpBinding.mk' Types.Protocol.HTTP (webAddress.ToString()) webConfig.Port] 
                    logger = suaveLogger }
 
             // start web
@@ -133,7 +133,7 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
                       DeliveryWebApi.config bookLibrarySystem
                       FileWebApi.config dbCommands
                       (Suave.Http.RequestErrors.NOT_FOUND "404 Not Found") ]
-                |> web_server_async suaveConfig
+                |> startWebServerAsync suaveConfig
             listens |> Async.Start
 
             let projector = 
@@ -155,7 +155,7 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
             let writeQueue = new RavenWriteQueue(documentStore, 100, 10000, 10, Async.DefaultCancellationToken, cache)
             let readQueue = new RavenReadQueue(documentStore, 100, 1000, 10, Async.DefaultCancellationToken, cache)
 
-            let bulkRavenProjector =    
+            let bulkRavenProjector =
                 BulkRavenProjector.create
                     (
                         ravenConfig.Database,
