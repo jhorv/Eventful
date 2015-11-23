@@ -6,7 +6,8 @@ open Eventful
 open FSharpx.Choice
 open FSharpx
 open FSharpx.Collections
-open FSharp.Control.AsyncSeq
+open FSharpx.Functional.Prelude
+open FSharp.Control
 
 [<CLIMutable>]
 type AddBookCommand = {
@@ -179,7 +180,7 @@ module BooksWebApi =
 
     let config system =
         choose [
-            url "/api/books" >>= choose
+            path "/api/books" >>= choose
                 [ 
                     POST >>= commandHandler system addHandler
                 ]

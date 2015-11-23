@@ -24,7 +24,7 @@ module MultiCommandBlockTests =
         }
 
         interpret program
-        !exnCaught =? true
+        !exnCaught =! true
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -39,7 +39,7 @@ module MultiCommandBlockTests =
 
         interpret program
 
-        !catchBlockRun =? false
+        !catchBlockRun =! false
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -54,7 +54,7 @@ module MultiCommandBlockTests =
 
         interpret program
 
-        !finallyRun =? true
+        !finallyRun =! true
 
     [<Fact>]
     [<Trait("category", "unit")>]
@@ -72,4 +72,4 @@ module MultiCommandBlockTests =
         with | e ->
             ()
 
-        !finallyRun =? true
+        !finallyRun =! true

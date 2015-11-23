@@ -17,11 +17,11 @@ open FSharpx.Option
 
 open TestEventStoreSystemHelpers
 
-type AggregateIntegrationTests () = 
+type AggregateIntegrationTests (fixture : TestEventStoreSystemFixture) =
 
-    let mutable system : EventStoreSystem<unit, MockDisposable, TestMetadata, obj> option = None
-    let mutable connection : EventStore.ClientAPI.IEventStoreConnection = null
-    let mutable eventStoreAccess : InMemoryEventStoreRunner.EventStoreAccess option = None
+    let system : EventStoreSystem<unit, MockDisposable, TestMetadata, obj> option = Some fixture.System
+    let connection : EventStore.ClientAPI.IEventStoreConnection = fixture.Connection
+    let eventStoreAccess : InMemoryEventStoreRunner.EventStoreAccess option = Some fixture.EventStoreAccess
 
     let streamPositionMap : Map<string, int> ref = ref Map.empty
     let lastPosition : EventPosition ref = ref EventPosition.Start
@@ -124,8 +124,8 @@ type AggregateIntegrationTests () =
 
             let! storedPosition = ProcessingTracker.readPosition client system.PositionStream
 
-            !lastPosition >? EventPosition.Start
-            storedPosition >=? !lastPosition
+            !lastPosition >! EventPosition.Start
+            storedPosition >=! !lastPosition
         } |> Async.RunSynchronously
 
     [<Fact>]
@@ -210,14 +210,10 @@ type AggregateIntegrationTests () =
 
             let correlationId = Guid.NewGuid() |> Some
             let! { State = count } = system.RunStreamProgram correlationId "RunStreamProgram" lastWidgetIdProgram
-            lastWidgetIdStateBuilder.GetState count =? Some widgetId
+            lastWidgetIdStateBuilder.GetState count =! Some widgetId
 
             return ()
 
         } |> Async.RunSynchronously
 
-    interface Xunit.IUseFixture<TestEventStoreSystemFixture> with
-        member x.SetFixture(fixture) =
-            system <- Some fixture.System
-            connection <- fixture.Connection
-            eventStoreAccess <- Some fixture.EventStoreAccess
+    interface Xunit.IClassFixture<TestEventStoreSystemFixture>

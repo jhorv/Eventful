@@ -7,11 +7,14 @@ open Eventful.Raven
 
 open FsUnit.Xunit
 
-module RavenOperationTests = 
+module RavenOperationTests =
+    let testDb = "tenancy-blue"
+
     let buildDocumentStore () =
         let documentStore = new Raven.Client.Document.DocumentStore()
         documentStore.Url <- "http://localhost:8080"
         documentStore.Initialize() |> ignore
+        documentStore.DatabaseCommands.GlobalAdmin.EnsureDatabaseExists(testDb)
         documentStore
 
     [<CLIMutable>]
@@ -19,8 +22,6 @@ module RavenOperationTests =
         Id : string
         Value : string
     }
-
-    let testDb = "tenancy-blue"
 
     [<Fact>]
     let ``Retrieve non existent doc`` () : unit =

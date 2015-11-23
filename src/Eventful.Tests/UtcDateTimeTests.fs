@@ -79,4 +79,4 @@ module UtcDateTimeTests =
         localDateTime
         |> roundTripViaString
         |> (fun x -> x.Kind)
-        =? DateTimeKind.Utc
+        =! DateTimeKind.Utc

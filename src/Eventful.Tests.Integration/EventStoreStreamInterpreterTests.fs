@@ -21,9 +21,9 @@ type NumberValue = {
     Value : int
 }
 
-type EventStoreStreamInterpreterTests () = 
+type EventStoreStreamInterpreterTests (fixture : EventStoreFixture) =
 
-    let mutable connection : EventStore.ClientAPI.IEventStoreConnection = null
+    let connection : EventStore.ClientAPI.IEventStoreConnection = fixture.Connection
 
     let newId () : string =
         Guid.NewGuid().ToString()
@@ -249,7 +249,7 @@ type EventStoreStreamInterpreterTests () =
             let! writtenMetadata = client.getStreamMetadata stream
 
             let expectedMaxCount = Nullable(1)
-            writtenMetadata.StreamMetadata.MaxCount =? Nullable(1)
+            writtenMetadata.StreamMetadata.MaxCount =! Nullable(1)
         } |> Async.StartAsTask
 
     [<Fact>]
@@ -266,9 +266,7 @@ type EventStoreStreamInterpreterTests () =
 
             let! writtenMetadata = client.getStreamMetadata stream
 
-            writtenMetadata.StreamMetadata.MaxAge =? Nullable(TimeSpan.FromDays(1.))
+            writtenMetadata.StreamMetadata.MaxAge =! Nullable(TimeSpan.FromDays(1.))
         } |> Async.StartAsTask
 
-    interface Xunit.IUseFixture<EventStoreFixture> with
-        member x.SetFixture(fixture) =
-            connection <- fixture.Connection
+    interface Xunit.IClassFixture<EventStoreFixture>

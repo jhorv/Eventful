@@ -7,7 +7,7 @@ open Suave.Http
 open Suave.Http.Successful
 
 type SuaveEventfulLogger(logger : Serilog.ILogger) =
-  interface Suave.Log.Logger with
+  interface Suave.Logging.Logger with
     member x.Log level f_line =
       match level with
       | _ ->
@@ -17,11 +17,11 @@ type SuaveEventfulLogger(logger : Serilog.ILogger) =
 
 module WebHelpers =
     let log = createLogger "BookLibrary.WebHelpers"
-    let fromJson<'TDto> (f : 'TDto -> Types.WebPart) (context : Types.HttpContext) : Types.SuaveTask<Types.HttpContext> =
-        let dto = Serialization.deserializeObj context.request.raw_form typeof<'TDto> :?> 'TDto
+    let fromJson<'TDto> (f : 'TDto -> Types.WebPart) (context : Types.HttpContext) : Async<Types.HttpContext option> =
+        let dto = Serialization.deserializeObj context.request.rawForm typeof<'TDto> :?> 'TDto
         f dto context 
         
-    let runCommandInSystem (system  : IBookLibrarySystem) (cmd, successResult) (context : Types.HttpContext) : Types.SuaveTask<Types.HttpContext> = async {
+    let runCommandInSystem (system  : IBookLibrarySystem) (cmd, successResult) (context : Types.HttpContext) : Async<Types.HttpContext option> = async {
         let! result = system.RunCommand cmd 
         log.RichDebug "Command Result {@Command} {@Result}" [|cmd;result|]
         return!
@@ -29,7 +29,7 @@ module WebHelpers =
             | Choice1Of2 result ->
                 match result.Position with
                 | Some position -> 
-                    Writers.set_header "eventful-last-write" (position.BuildToken()) 
+                    Writers.setHeader "eventful-last-write" (position.BuildToken()) 
                     >>= 
                         (Serialization.serialize successResult |> accepted)
                 | None -> 
@@ -45,7 +45,7 @@ module WebHelpers =
         fromJson<'TCommand> (f >> runCommandInSystem system)
 
     let F prefix postfix h (r:Types.HttpContext) =
-        let url = r.request.url
+        let url = r.request.url.ToString()
         match (url.StartsWith(prefix) && url.EndsWith(postfix)) with
         | true ->
           let idStart = prefix.Length
@@ -77,10 +77,20 @@ open Xunit
 open FsUnit.Xunit
 
 module WebHelperTests =
+    open Swensen.Unquote
+
     let testUrlAgainstGuidRule pattern url =
          let handler = WebHelpers.url_with_guid pattern (fun guid -> OK (guid.ToString()))
-         let request = Types.HttpRequest.mk "1.1" url "GET" List.empty String.Empty Log.TraceHeader.empty false Net.IPAddress.Loopback
-         let context = Types.HttpContext.mk request Types.HttpRuntime.empty
+         let request = { Types.HttpRequest.empty with
+                            httpVersion = "1.1";
+                            url = Uri(url, UriKind.Relative)
+                            ``method`` = Types.HttpMethod.GET
+                            headers = List.empty
+                            rawQuery = String.Empty
+                            trace = Logging.TraceHeader.empty
+                            host = Net.IPAddress.Loopback.ToString()
+                        }
+         let context = Types.HttpContext.mk request Types.HttpRuntime.empty Sockets.Connection.empty false
          let result = handler context |> Async.RunSynchronously
          match result with
          | Some result ->

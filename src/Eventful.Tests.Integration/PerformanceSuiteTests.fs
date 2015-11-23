@@ -71,7 +71,7 @@ module PerformanceSuiteTests =
                     | [bookId] ->
                         printfn "BookId: %A" bookId
                         true
-                    | _ -> false @>  
+                    | _ -> false @>
 
             ()
         } |> Async.StartAsTask

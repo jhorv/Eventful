@@ -1,3 +1,0 @@
-[submodule "vendor/Neo4jClient"]
-	path = vendor/Neo4jClient
-	url = https://github.com/dgchurchill/Neo4jClient.git

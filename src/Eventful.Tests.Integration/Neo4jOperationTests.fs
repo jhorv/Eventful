@@ -5,7 +5,6 @@ open System
 open Xunit
 open FsUnit.Xunit
 open NHamcrest
-
 open Neo4jClient
 open Eventful.Neo4j
 open Eventful.Neo4j.Operations
@@ -14,8 +13,8 @@ module Neo4jOperationTests =
     let testGraphName = "eventful-test"
 
     let buildGraphClientAndCleanTestGraph () =
-        let uri = new Uri("http://192.168.59.103:7474/db/data")
-        let graphClient = new GraphClient(uri)
+        let uri = new Uri("http://localhost:7474/db/data")
+        let graphClient = new GraphClient(uri, "neo4j", "changeit")
         graphClient.Connect()
 
         let query = beginQ graphClient testGraphName

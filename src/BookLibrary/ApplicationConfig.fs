@@ -5,7 +5,7 @@ open EventStore.ClientAPI
 open Eventful
 open Eventful.EventStore
 open FSharpx
-open Nessos.UnionArgParser
+open Nessos.Argu
 
 type BookLibrarySystem (system : BookLibraryEventStoreSystem) = 
     interface IBookLibrarySystem with
@@ -23,7 +23,7 @@ type CLIArguments =
     | WebServer of host:string * port:int
     | Create_Raven_Database
 with 
-    static member Parser = UnionArgParser.Create<CLIArguments>()
+    static member Parser = ArgumentParser.Create<CLIArguments>()
     interface IArgParserTemplate with
         member s.Usage =
             match s with

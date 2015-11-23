@@ -60,7 +60,7 @@ module DeliveryWebApi =
 
     let config system =
         choose [
-            url "/api/delivery" >>= choose
+            path "/api/delivery" >>= choose
                 [ 
                     POST >>= commandHandler system acceptHandler
                 ]

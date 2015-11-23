@@ -5,6 +5,7 @@ open Eventful
 open Eventful.Testing
 
 open FSharpx
+open FSharpx.Functional.Prelude     // for konst
 
 open Xunit
 open FsUnit.Xunit

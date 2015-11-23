@@ -4,9 +4,9 @@ open Xunit
 open Eventful
 open Eventful.EventStore
 
-type PositionTests () = 
+type PositionTests (fixture : EventStoreFixture) = 
 
-    let mutable connection : EventStore.ClientAPI.IEventStoreConnection = null
+    let connection : EventStore.ClientAPI.IEventStoreConnection = fixture.Connection
 
     [<Fact>]
     [<Trait("category", "eventstore")>]
@@ -26,6 +26,4 @@ type PositionTests () =
             | p -> Assert.True(false, (sprintf "Unexpected position %A" p))
         } |> Async.RunSynchronously
 
-    interface Xunit.IUseFixture<EventStoreFixture> with
-        member x.SetFixture(fixture) =
-            connection <- fixture.Connection
+    interface Xunit.IClassFixture<EventStoreFixture>

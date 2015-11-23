@@ -1,4 +1,4 @@
-namespace Eventful
+﻿namespace Eventful.Neo4j.AssemblyInfo
 
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -7,13 +7,14 @@ open System.Runtime.InteropServices
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[<assembly: AssemblyTitle("Eventful")>]
+[<assembly: AssemblyTitle("Eventful.Neo4j")>]
 [<assembly: AssemblyDescription("")>]
 [<assembly: AssemblyConfiguration("")>]
-[<assembly: AssemblyCompany("Andrew Browne")>]
-[<assembly: AssemblyProduct("Eventful")>]
-[<assembly: AssemblyCopyright("Copyright Andrew Browne 2014")>]
+[<assembly: AssemblyCompany("")>]
+[<assembly: AssemblyProduct("Eventful.Neo4j")>]
+[<assembly: AssemblyCopyright("Copyright ©  2015")>]
 [<assembly: AssemblyTrademark("")>]
+[<assembly: AssemblyCulture("")>]
 
 // Setting ComVisible to false makes the types in this assembly not visible 
 // to COM components.  If you need to access a type in this assembly from 
@@ -21,19 +22,20 @@ open System.Runtime.InteropServices
 [<assembly: ComVisible(false)>]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[<assembly: Guid("E4A7A1E3-7E36-4D11-87A8-BC3BB948C1DA")>]
+[<assembly: Guid("a1e132f9-a8ae-4e0a-b3d2-b3525f0ea1fd")>]
 
 // Version information for an assembly consists of the following four values:
-//
-//      Major Version
-//      Minor Version 
-//      Build Number
-//      Revision
-//
+// 
+//       Major Version
+//       Minor Version 
+//       Build Number
+//       Revision
+// 
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
-// [assembly: AssemblyVersion("1.0.*")]
-[<assembly: AssemblyVersion("0.0.1.14")>]
-[<assembly: AssemblyFileVersion("0.0.1.14")>]
+// [<assembly: AssemblyVersion("1.0.*")>]
+[<assembly: AssemblyVersion("1.0.0.0")>]
+[<assembly: AssemblyFileVersion("1.0.0.0")>]
 
-()
+do
+    ()

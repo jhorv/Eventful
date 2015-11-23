@@ -121,4 +121,4 @@ module NewArrivalsNotificationTests =
         let notificationStreamName = NewArrivalsNotification.getStreamName () NewArrivalsNotification.notificationId
         let sent = afterRun.EvaluateState notificationStreamName () notificationsSentBuilder
 
-        sent =? [bookId]
+        sent =! [bookId]

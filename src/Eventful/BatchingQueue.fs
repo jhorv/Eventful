@@ -34,7 +34,7 @@ module internal BatchingQueueState =
         queue
 
     let getBatch (queue: BatchingQueueState<'TKey,'T,'U>) size : (BatchWork<'TKey, 'T,'U> * BatchingQueueState<'TKey,'T,'U>) =
-        let key = queue.HasWork |> Seq.nth (rnd.Next(queue.HasWork.Count))
+        let key = queue.HasWork |> Seq.item (rnd.Next(queue.HasWork.Count))
         let selectedQueue = queue.Queues.Item key
         let batchSize = min size selectedQueue.Count
 

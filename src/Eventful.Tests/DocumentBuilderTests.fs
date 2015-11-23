@@ -1,10 +1,8 @@
 ﻿namespace Eventful.Tests
 
 open System
-
 open Xunit
 open FsUnit.Xunit
-
 open Eventful
 open Swensen.Unquote
 
@@ -48,16 +46,16 @@ module DocumentBuilderTests =
 
         // visitDocumentBuilder.EventTypes |> List.exists (fun x -> x = typeof<WidgetRenamedEvent>) |> should equal true
         let guid = Guid.Parse("75ca0d81-7a8e-4692-86ac-7f128deb75bd")
-        visitDocumentBuilder.GetDocumentKey guid =? "WidgetDocument/75ca0d81-7a8e-4692-86ac-7f128deb75bd"
+        visitDocumentBuilder.GetDocumentKey guid =! "WidgetDocument/75ca0d81-7a8e-4692-86ac-7f128deb75bd"
 
         let newNameEvent = { WidgetId = guid; NewName = "New Name"}
         let metadata = { Tenancy = ""; AggregateId = guid }
 
-        visitDocumentBuilder.GetKeysFromEvent (newNameEvent, metadata) =? [guid]
+        visitDocumentBuilder.GetKeysFromEvent (newNameEvent, metadata) =! [guid]
 
         let emptyDocument = visitDocumentBuilder.NewDocument guid
         emptyDocument |> should equal { WidgetDocument.WidgetId = guid; Name = ""}
 
         visitDocumentBuilder.ApplyEvent (getDocumentKey guid,emptyDocument,newNameEvent, metadata) 
         |> (fun x -> x.Name)
-        =? "New Name"
+        =! "New Name"
