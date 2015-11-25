@@ -21,7 +21,7 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Eventful.Tests", "src\Event
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Eventful.Tests.Integration", "src\Eventful.Tests.Integration\Eventful.Tests.Integration.fsproj", "{1C49FE77-D3F1-45B4-ABFD-9B6E2488C75E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventfulPackage", "packages\EventfulPackage\EventfulPackage.csproj", "{0451BAEF-DF2E-4B98-8644-94EE9415E389}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventfulPackage", "src\EventfulPackage\EventfulPackage.csproj", "{0451BAEF-DF2E-4B98-8644-94EE9415E389}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
