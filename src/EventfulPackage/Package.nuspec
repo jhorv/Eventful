@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>EventfulForDotNet46</id>
+    <version>1.0.0-pre</version>
+    <title>Eventful for .NET 4.6</title>
+    <authors>jimho</authors>
+    <owners></owners>
+    <description>
+      Custom build of Eventful using jhorv's solution-rebuild branch.
+    </description>
+    <releaseNotes>
+    </releaseNotes>
+    <summary>
+      A short description of the package. If specified, this shows up in the middle pane of the Add Package Dialog. If not specified, a truncated version of the description is used instead.
+    </summary>
+    <language>en-US</language>
+    <projectUrl>https://github.com/picnicbasket/eventful</projectUrl>
+    <iconUrl>https://nuget.org/Content/Images/packageDefaultIcon-50x50.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>http://opensource.org/licenses/Apache-2.0</licenseUrl>
+    <copyright>Copyright Andrew Browne 2015</copyright>
+    <dependencies>
+        <group targetFramework="net46">
+          <!--<dependency id="log4net" version="1.2.10" />-->
+          <dependency id="EventStore.Client" version="3.3.1" />
+          <dependency id="FSharp.Collections.ParallelSeq" version="1.0.2" />
+          <dependency id="FSharp.Control.AsyncSeq" version="2.0.2" />
+          <dependency id="FSharp.Core" version="4.0.0.1" />
+          <dependency id="FSharp.Data" version="2.2.5" />
+          <dependency id="FSharpx.Async" version="1.12.0" />
+          <dependency id="FSharpx.Collections" version="1.13.4" />
+          <dependency id="FSharpx.Extras" version="1.10.3" />
+          <dependency id="Metrics.NET" version="0.3.3-pre" />
+          <dependency id="RavenDB.Client" version="3.0.30000" />
+          <dependency id="Serilog" version="1.5.14" />
+        </group>
+    </dependencies>
+    <references></references>
+    <tags></tags>
+  </metadata>
+  <files>
+    <!--<file src="bin\$configuration$\Eventful.*" target="lib\net46\" />-->
+    <file src="bin\Debug\Eventful.*" target="lib\net46\" />
+    
+    <!--<file src="bin\$configuration$\Eventful.EventStore.*" target="lib\net46\" />
+    <file src="bin\$configuration$\Eventful.Neo4j.*" target="lib\net46\" />
+    <file src="bin\$configuration$\Eventful.RavenDb.*" target="lib\net46\" />-->
+    <!--<file src="tools\" target="tools" />
+    <file src="content\" target="content" />-->
+  </files>
+</package>
