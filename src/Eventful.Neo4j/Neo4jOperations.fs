@@ -5,12 +5,9 @@ open System.Linq.Expressions
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Linq.RuntimeHelpers
 open Newtonsoft.Json
-
 open Eventful
-
 open FSharpx
 open FSharp.Data
-
 open Neo4jClient
 open Neo4jClient.Cypher
 

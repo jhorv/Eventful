@@ -4,16 +4,11 @@ open System
 open Eventful
 open Eventful.EventStore
 open EventStore.ClientAPI
-open Eventful.Raven
 open Suave
 open Suave.Http
 open Suave.Web
 
 module SetupHelpers =
-    let buildDocumentStore (ravenConfig : RavenConfig) =
-        let documentStore = new Raven.Client.Document.DocumentStore(Url = sprintf "http://%s:%d/" ravenConfig.Server ravenConfig.Port)
-        documentStore.Initialize() |> ignore
-        documentStore :> Raven.Client.IDocumentStore
 
     let addEventTypes evtTypes handlers =
         Array.fold (fun h x -> StandardConventions.addEventType x h) handlers evtTypes
@@ -33,10 +28,122 @@ module SetupHelpers =
         |> EventfulHandlers.addAggregate NewArrivalsNotification.handlers
         |> addEventTypes eventTypes
 
+module Neo4jHelpers =
+    open Eventful.Neo4j
+
+    let buildGraphClient (neo4jConfig : Neo4jConfig) =
+        let uri = new UriBuilder("http", neo4jConfig.Server, neo4jConfig.Port, "/db/data")
+        let graphClient = new Neo4jClient.GraphClient(uri.Uri, "neo4j", "changeit")
+        graphClient.Connect()
+        graphClient :> Neo4jClient.ICypherGraphClient
+
+    let initProjector (neo4jConfig : Neo4jConfig) (graphClient : Neo4jClient.ICypherGraphClient) (system : BookLibraryEventStoreSystem) =
+
+        let graphName = neo4jConfig.GraphName
+
+        let projector = 
+            DocumentBuilderProjector.buildProjector 
+                graphClient
+                Book.documentBuilder
+                (fun (m:EventStoreMessage) -> m.Event)
+                (fun (m:EventStoreMessage) -> m.EventContext)
+            :> IProjector<_,_,_>
+
+            
+        let writeQueue = new Neo4jWriteQueue(graphClient, 100, 10000, 10, Async.DefaultCancellationToken)
+        //let writeQueue = new Neo4jWriteQueue(graphClient, 1, 1, 10, Async.DefaultCancellationToken)
+
+        let executor actions =
+            writeQueue.Work graphName actions
+
+
+        let bulkNeo4jProjector =
+            BulkNeo4jProjector.create
+                (
+                    graphName,
+                    [projector],
+                    Async.DefaultCancellationToken,
+                    (fun _ -> async { () }),
+                    graphClient,
+                    executor,
+                    100000,
+                    1000,
+                    Some (TimeSpan.FromSeconds(60.0)),
+                    TimeSpan.FromSeconds 5.0
+                )
+
+        bulkNeo4jProjector.StartWork ()
+        bulkNeo4jProjector.StartPersistingPosition ()
+
+        let lastPosition =
+            bulkNeo4jProjector.LastComplete() 
+            |> Async.RunSynchronously 
+            |> Option.map (fun eventPosition -> new EventStore.ClientAPI.Position(eventPosition.Commit, eventPosition.Prepare))
+
+        (bulkNeo4jProjector, lastPosition)
+        //((), ())
+
+
+
+module RavenHelpers =
+    open Eventful.Raven
+
+    let buildDocumentStore (ravenConfig : RavenConfig) =
+        let ds = new Raven.Client.Document.DocumentStore(Url = UriBuilder("http", ravenConfig.Server, ravenConfig.Port).ToString())
+        ds.Initialize() |> ignore
+        ds :> Raven.Client.IDocumentStore
+
+    let initProjector (ravenConfig : RavenConfig) (documentStore : Raven.Client.IDocumentStore) (system : BookLibraryEventStoreSystem) =
+        let projector = 
+            DocumentBuilderProjector.buildProjector 
+                documentStore 
+                Book.documentBuilder
+                (fun (m:EventStoreMessage) -> m.Event)
+                (fun (m:EventStoreMessage) -> m.EventContext)
+            :> IProjector<_,_,_>
+
+        let aggregateStateProjector = 
+            AggregateStatePersistence.buildProjector
+                (EventStoreMessage.ToPersitedEvent >> Some)
+                Serialization.esSerializer
+                system.Handlers
+
+        let cache = new RavenMemoryCache("myCache", documentStore)
+
+        let writeQueue = new RavenWriteQueue(documentStore, 100, 10000, 10, Async.DefaultCancellationToken, cache)
+        let readQueue = new RavenReadQueue(documentStore, 100, 1000, 10, Async.DefaultCancellationToken, cache)
+
+        let bulkRavenProjector =
+            BulkRavenProjector.create
+                (
+                    ravenConfig.Database,
+                    [projector; aggregateStateProjector],
+                    Async.DefaultCancellationToken,
+                    (fun _ -> async { () }),
+                    documentStore,
+                    writeQueue,
+                    readQueue,
+                    100000, 
+                    1000, 
+                    Some (TimeSpan.FromSeconds(60.0)),
+                    TimeSpan.FromSeconds 5.0
+                )
+        bulkRavenProjector.StartWork ()
+        bulkRavenProjector.StartPersistingPosition ()
+
+        let lastPosition =
+            bulkRavenProjector.LastComplete() 
+            |> Async.RunSynchronously 
+            |> Option.map (fun eventPosition -> new EventStore.ClientAPI.Position(eventPosition.Commit, eventPosition.Prepare))
+
+        (bulkRavenProjector, lastPosition)
+
+
 type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
     let log = createLogger "BookLibrary.BookLibraryServiceRunner"
     let webConfig = applicationConfig.WebServer
     let ravenConfig = applicationConfig.Raven
+    let neo4jConfig = applicationConfig.Neo4j
     let eventStoreConfig = applicationConfig.EventStore
 
     let mutable client : EventStoreClient option = None
@@ -107,7 +214,8 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
             let! connection = getConnection eventStoreConfig
             let c = new EventStoreClient(connection)
 
-            let documentStore = SetupHelpers.buildDocumentStore ravenConfig
+            let documentStore = RavenHelpers.buildDocumentStore ravenConfig
+            //let graphClient = Neo4jHelpers.buildGraphClient neo4jConfig
 
             let system : BookLibraryEventStoreSystem = buildEventStoreSystem documentStore c
             system.Start() |> Async.StartAsTask |> ignore
@@ -136,49 +244,10 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
                 |> startWebServerAsync suaveConfig
             listens |> Async.Start
 
-            let projector = 
-                DocumentBuilderProjector.buildProjector 
-                    documentStore 
-                    Book.documentBuilder
-                    (fun (m:EventStoreMessage) -> m.Event)
-                    (fun (m:EventStoreMessage) -> m.EventContext)
-                :> IProjector<_,_,_>
+            let bulkRavenProjector, lastRavenPosition = RavenHelpers.initProjector ravenConfig documentStore system
+            //let bulkNeo4jProjector, lastNeo4jPosition = Neo4jHelpers.initProjector neo4jConfig graphClient system
 
-            let aggregateStateProjector = 
-                AggregateStatePersistence.buildProjector
-                    (EventStoreMessage.ToPersitedEvent >> Some)
-                    Serialization.esSerializer
-                    system.Handlers
-
-            let cache = new RavenMemoryCache("myCache", documentStore)
-
-            let writeQueue = new RavenWriteQueue(documentStore, 100, 10000, 10, Async.DefaultCancellationToken, cache)
-            let readQueue = new RavenReadQueue(documentStore, 100, 1000, 10, Async.DefaultCancellationToken, cache)
-
-            let bulkRavenProjector =
-                BulkRavenProjector.create
-                    (
-                        ravenConfig.Database,
-                        [projector; aggregateStateProjector],
-                        Async.DefaultCancellationToken,  
-                        (fun _ -> async { () }),
-                        documentStore,
-                        writeQueue,
-                        readQueue,
-                        100000, 
-                        1000, 
-                        Some (TimeSpan.FromSeconds(60.0)),
-                        TimeSpan.FromSeconds 5.0
-                    )
-            bulkRavenProjector.StartWork ()
-            bulkRavenProjector.StartPersistingPosition ()
-
-            let lastPosition = 
-                bulkRavenProjector.LastComplete() 
-                |> Async.RunSynchronously 
-                |> Option.map (fun eventPosition -> new EventStore.ClientAPI.Position(eventPosition.Commit, eventPosition.Prepare))
-
-            let handle id (re : EventStore.ClientAPI.ResolvedEvent) =
+            let handle (projector : BulkProjector<#IBulkMessage,'TMessage>) id (re : EventStore.ClientAPI.ResolvedEvent) =
                 log.Debug <| lazy(sprintf "Projector received event : %s" re.Event.EventType)
                 match system.EventStoreTypeToClassMap.ContainsKey re.Event.EventType with
                 | true ->
@@ -196,13 +265,38 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
                         EventType = re.Event.EventType
                     }
 
-                    bulkRavenProjector.Enqueue (eventStoreMessage)
+                    //bulkRavenProjector.Enqueue (eventStoreMessage)
+                    projector.Enqueue (eventStoreMessage)
                 | false -> async { () }
+
+
+//            let handle id (re : EventStore.ClientAPI.ResolvedEvent) =
+//                log.Debug <| lazy(sprintf "Projector received event : %s" re.Event.EventType)
+//                match system.EventStoreTypeToClassMap.ContainsKey re.Event.EventType with
+//                | true ->
+//                    let eventClass = system.EventStoreTypeToClassMap.Item re.Event.EventType
+//                    let evtObj = Serialization.esSerializer.DeserializeObj re.Event.Data eventClass
+//                    let metadata = Serialization.esSerializer.DeserializeObj re.Event.Metadata typeof<BookLibraryEventMetadata> :?> BookLibraryEventMetadata
+//
+//                    let eventStoreMessage : EventStoreMessage = {
+//                        EventContext = metadata
+//                        Id = re.Event.EventId
+//                        Event = evtObj
+//                        StreamIndex = re.Event.EventNumber
+//                        EventPosition = { Commit = re.OriginalPosition.Value.CommitPosition; Prepare = re.OriginalPosition.Value.PreparePosition }
+//                        StreamName = re.Event.EventStreamId
+//                        EventType = re.Event.EventType
+//                    }
+//
+//                    //bulkRavenProjector.Enqueue (eventStoreMessage)
+//                    bulkNeo4jProjector.Enqueue (eventStoreMessage)
+//                | false -> async { () }
 
             let onLive _ = ()
 
             log.Debug <| lazy(sprintf "About to subscribe projector")
-            c.subscribe lastPosition handle onLive |> ignore
+            c.subscribe lastRavenPosition (handle bulkRavenProjector) onLive |> ignore
+            //c.subscribe lastNeo4jPosition (handle bulkNeo4jProjector) onLive |> ignore
             log.Debug <| lazy(sprintf "Subscribed projector")
 
             client <- Some c

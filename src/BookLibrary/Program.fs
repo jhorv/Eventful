@@ -25,6 +25,8 @@ let main argv =
                  { config with Raven = { config.Raven with Server = host; Port = port }}
             | RavenDatabase database -> 
                  { config with Raven = { config.Raven with Database = database }}
+            | Neo4jServer (host, port) ->
+                 { config with Neo4j = { config.Neo4j with Server = host; Port = port }}
             | EventStore (host, port) ->
                  { config with EventStore = { config.EventStore with Server = host; TcpPort = port }}
             | WebServer (host, port) ->
@@ -37,7 +39,7 @@ let main argv =
     if createRavenDb then
         let ravenConfig = applicationConfig.Raven
         Console.WriteLine "Creating Raven Database"
-        let documentStore = SetupHelpers.buildDocumentStore ravenConfig
+        let documentStore = RavenHelpers.buildDocumentStore ravenConfig
         documentStore.DatabaseCommands.GlobalAdmin.EnsureDatabaseExists(ravenConfig.Database)
         let definition = Eventful.Raven.AggregateStatePersistence.wakeupIndex()
         documentStore.DatabaseCommands.ForDatabase(ravenConfig.Database).PutIndex(definition.Name, definition, true) |> ignore

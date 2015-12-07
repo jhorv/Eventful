@@ -59,6 +59,7 @@
     <Compile Include="Neo4jWriteQueue.fs" />
     <Compile Include="BulkNeo4jProjector.fs" />
     <Compile Include="Neo4jReadQueue.fs" />
+    <Compile Include="DocumentBuilderProjector.fs" />
     <Content Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

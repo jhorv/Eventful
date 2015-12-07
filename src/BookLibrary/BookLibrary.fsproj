@@ -77,6 +77,11 @@
     <Content Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Eventful.Neo4j\Eventful.Neo4j.fsproj">
+      <Name>Eventful.Neo4j</Name>
+      <Project>{a1e132f9-a8ae-4e0a-b3d2-b3525f0ea1fd}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Eventful\Eventful.fsproj">
       <Name>Eventful</Name>
       <Project>{31dedd5b-20ab-49c8-9483-4e53303f4629}</Project>
@@ -115,6 +120,10 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="mscorlib" />
+    <Reference Include="Neo4jClient">
+      <HintPath>..\..\packages\Neo4jClient.1.1.0.14\lib\net45\Neo4jClient.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>..\..\packages\Newtonsoft.Json.7.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
