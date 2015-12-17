@@ -215,7 +215,7 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
             let c = new EventStoreClient(connection)
 
             let documentStore = RavenHelpers.buildDocumentStore ravenConfig
-            //let graphClient = Neo4jHelpers.buildGraphClient neo4jConfig
+            let graphClient = Neo4jHelpers.buildGraphClient neo4jConfig
 
             let system : BookLibraryEventStoreSystem = buildEventStoreSystem documentStore c
             system.Start() |> Async.StartAsTask |> ignore
@@ -244,8 +244,8 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
                 |> startWebServerAsync suaveConfig
             listens |> Async.Start
 
-            let bulkRavenProjector, lastRavenPosition = RavenHelpers.initProjector ravenConfig documentStore system
-            //let bulkNeo4jProjector, lastNeo4jPosition = Neo4jHelpers.initProjector neo4jConfig graphClient system
+            //let bulkRavenProjector, lastRavenPosition = RavenHelpers.initProjector ravenConfig documentStore system
+            let bulkNeo4jProjector, lastNeo4jPosition = Neo4jHelpers.initProjector neo4jConfig graphClient system
 
             let handle (projector : BulkProjector<#IBulkMessage,'TMessage>) id (re : EventStore.ClientAPI.ResolvedEvent) =
                 log.Debug <| lazy(sprintf "Projector received event : %s" re.Event.EventType)
@@ -295,8 +295,8 @@ type BookLibraryServiceRunner (applicationConfig : ApplicationConfig) =
             let onLive _ = ()
 
             log.Debug <| lazy(sprintf "About to subscribe projector")
-            c.subscribe lastRavenPosition (handle bulkRavenProjector) onLive |> ignore
-            //c.subscribe lastNeo4jPosition (handle bulkNeo4jProjector) onLive |> ignore
+            //c.subscribe lastRavenPosition (handle bulkRavenProjector) onLive |> ignore
+            c.subscribe lastNeo4jPosition (handle bulkNeo4jProjector) onLive |> ignore
             log.Debug <| lazy(sprintf "Subscribed projector")
 
             client <- Some c

@@ -27,7 +27,21 @@ module DocumentBuilderProjector =
         let genericMethod = methodWithoutGeneric.MakeGenericMethod([|event.GetType()|])
         genericMethod.Invoke(documentBuilder, [|docKey; document; event; metadata|]) :?> 'TDocument
 
-    let processEvents (documentBuilder : DocumentBuilder<'TDocumentKey,'TDocument, 'TMetadata>) documentStore (projectorMessage : MessageOperations<'TMessage, 'TBaseEvent, 'TMetadata>) (documentFetcher:unit) (key:IComparable) (messages : seq<'TMessage>) = async {
+    let processEvents
+        (documentBuilder : DocumentBuilder<'TDocumentKey,'TDocument, 'TMetadata>)
+        (documentStore)
+        (projectorMessage : MessageOperations<'TMessage, 'TBaseEvent, 'TMetadata>)
+        (documentFetcher : unit)
+        (key : IComparable)
+        (messages : seq<'TMessage>) = async {
+        
+        ignore(documentBuilder)
+        ignore(documentStore)
+        ignore(projectorMessage)
+        ignore(documentFetcher)
+        ignore(key)
+        ignore(messages)
+        
         let key = (key :?> 'TDocumentKey) // presume we get back out what we put in
         let docKey = documentBuilder.GetDocumentKey key
 
