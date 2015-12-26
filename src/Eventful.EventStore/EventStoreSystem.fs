@@ -8,30 +8,49 @@ open FSharpx
 open FSharpx.Collections
 open FSharpx.Functional
 
+/// An event sourcing system backed by EventStore.
+/// This is the primary entrypoint to the library.
 type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent when 'TMetadata : equality and 'TEventContext :> System.IDisposable> 
     ( 
-        handlers : EventfulHandlers<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent>,
-        client : EventStoreClient,
-        serializer: ISerializer,
-        getEventContextFromMetadata : PersistedEvent<'TMetadata> -> 'TEventContext,
-        getSnapshot,
-        buildWakeupMonitor : (string -> string -> UtcDateTime -> unit) -> IWakeupMonitor
+        handlers : EventfulHandlers<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent> (* the system configuration *),
+        client : EventStoreClient (* for communicating with the EventStore *),
+        serializer: ISerializer (* for reading and writing events *),
+        getEventContextFromMetadata : PersistedEvent<'TMetadata> -> 'TEventContext (* calculates the event context from an event *),
+        getSnapshot (* function which takes a stream id and mapping from state block names to types and asynchronously calculates the current state snapshot *),
+        buildWakeupMonitor : (string -> string -> UtcDateTime -> unit) -> IWakeupMonitor (* function to create a wakeup monitor given a function to run a wakeup handler *)
     ) =
 
     let log = createLogger "Eventful.EventStoreSystem"
+
+    /// The name of the stream to store the position we've run event handlers up until.
     [<Literal>]
     let positionStream = "EventStoreProcessPosition"
+
+    /// The last position we wrote to the `positionStream`.
+    /// Note that we may have run handlers for events beyond this position but not yet recorded that fact.
     let mutable lastPositionUpdate = EventPosition.Start
 
-    let mutable lastEventProcessed : EventPosition = EventPosition.Start
+    //- let mutable lastEventProcessed : EventPosition = EventPosition.Start
+    /// Callbacks that will be executed after all event handlers have been executed for an event
     let mutable onCompleteCallbacks : List<EventPosition * string * int * EventStreamEventData<'TMetadata> -> unit> = List.empty
-    let mutable timer : System.Threading.Timer = null
+    // - let mutable timer : System.Threading.Timer = null
+    
+    /// A timer to regularly write out the current processing position
+    let mutable updatePositionTimer : System.Threading.Timer = null
+
+    /// EventStore subscription to get events to send to event handlers
     let mutable subscription : EventStoreAllCatchUpSubscription = null
+
+    /// Record which event we've processed up until.
+    /// NOTE: Because we always process events in sequence this could be replaced with a simple EventPosition variable.
     let completeTracker = new LastCompleteItemAgent<EventPosition>()
 
+    /// Async to store the latest processing position if it's changed since last time.
     let updatePositionLock = obj()
     let updatePosition _ = async {
         try
+            // TODO: This lock will only be held while the async computation is generated, not while it is executing.
+            //       Find out what it's protecting and fix it so it correctly protects it or remove it if it's not required.
             return!
                 lock updatePositionLock 
                     (fun () -> 
@@ -46,8 +65,10 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
         with | e ->
             log.ErrorWithException <| lazy("failure updating position", e)}
 
+    /// A cache for events read from EventStore
     let inMemoryCache = new System.Runtime.Caching.MemoryCache("EventfulEvents")
 
+    /// Log the start of an operation
     let logStart (correlationId : Guid option) name extraTemplate (extraVariables : obj[]) =
         let contextId = Guid.NewGuid()
         let startMessageTemplate = sprintf "Start %s: %s {@CorrelationId} {@ContextId}" name extraTemplate 
@@ -62,13 +83,15 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
             ExtraTemplate = extraTemplate
             ExtraVariables = extraVariables
         }
-
+    
+    /// Log the end of an operation
     let logEnd (startData : ContextStartData) = 
         let elapsed = startData.Stopwatch.ElapsedMilliseconds 
         let completeMessageTemplate = sprintf "Complete %s: {@CorrelationId} {@ContextId} {Elapsed:000} ms" startData.Name
         let completeMessageVariables : obj[] = [|startData.CorrelationId;startData.ContextId;elapsed|]
         log.RichDebug completeMessageTemplate completeMessageVariables
 
+    /// Log an exception
     let logException (startData : ContextStartData) (ex) = 
         let elapsed = startData.Stopwatch.ElapsedMilliseconds 
         let messageTemplate = sprintf "Exception in %s: {@Exception} %s {@CorrelationId} {@ContextId} {Elapsed:000} ms" startData.Name startData.ExtraTemplate
@@ -83,16 +106,20 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
             |> Array.ofSeq
         log.RichError messageTemplate messageVariables
         
-    let interpreter program = 
+    //-let interpreter program = 
+    /// Convert an event stream program into an async computation that executes the program
+    let interpreter startContext program = 
         EventStreamInterpreter.interpret 
-            client 
-            inMemoryCache 
-            serializer 
-            handlers.EventStoreTypeToClassMap 
+            client
+            inMemoryCache
+            serializer
+            handlers.EventStoreTypeToClassMap
             handlers.ClassToEventStoreTypeMap
-            getSnapshot 
+            getSnapshot
+            startContext
             program
 
+    /// Run the registered command handler for a command
     let runCommand context cmd = async {
         let correlationId = handlers.GetCommandCorrelationId context
         let startContext = logStart correlationId "command handler" "{@Command}" [|cmd|]
@@ -104,6 +131,7 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
         return result
     }
 
+    /// Run all the registered event handlers for an event
     let runHandlerForEvent buildContext (persistedEvent : PersistedEvent<'TMetadata>) program =
         let correlationId = handlers.GetEventCorrelationId persistedEvent.Metadata
         async {
@@ -116,6 +144,7 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
                 logException startContext e
         }
 
+    /// Run all the registered multi-command event handlers for an event
     let runMultiCommandHandlerForEvent buildContext (persistedEvent : PersistedEvent<'TMetadata>) program =
         let correlationId = handlers.GetEventCorrelationId persistedEvent.Metadata
         async {
@@ -127,6 +156,7 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
                 logException startContext e
         }
 
+    /// Run all registered normal and multi-command event handlers for an event
     let runEventHandlers (handlers : EventfulHandlers<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent>) (persistedEvent : PersistedEvent<'TMetadata>) =
         async {
             let regularEventHandlers = 
@@ -145,6 +175,7 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
                 |> Async.Ignore
         }
 
+    /// Run the specified wakeup handler
     let runWakeupHandler streamId aggregateType time =
         let correlationId = Some <| Guid.NewGuid()
         let startContext = logStart correlationId "multi wakeup handler" "{@StreamId} {@AggregateType} {@Time}" [|streamId;aggregateType;time|]
@@ -162,12 +193,17 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
         | None ->
             logException startContext (sprintf "Found wakeup for AggregateType %A but could not find any configuration" aggregateType)
 
+    /// The wakeup monitor which will invoke `runWakeupHandler` as required
     let wakeupMonitor = buildWakeupMonitor runWakeupHandler
 
+    /// Get the name of the stream used to record the current event handler processing position
     member x.PositionStream = positionStream
+
+    /// Add a callback to be called after all event handlers have been invoked for each event
     member x.AddOnCompleteEvent callback = 
         onCompleteCallbacks <- callback::onCompleteCallbacks
-
+    
+    /// Convert the given event stream program to an async computation
     member x.RunStreamProgram correlationId name program = 
         async {
             let startContext = logStart correlationId name String.Empty Array.empty 
@@ -175,7 +211,9 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
             logEnd startContext 
             return result
         }
-
+    
+    /// Start the system.
+    /// This will initiate the processing of event handlers and wakeup handlers.
     member x.Start () =  async {
         try
             do! ProcessingTracker.ensureTrackingStreamMetadata client positionStream
@@ -191,7 +229,7 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
                     async { return Nullable(currentEventStorePosition |> EventPosition.toEventStorePosition) }
 
             let timeBetweenPositionSaves = TimeSpan.FromSeconds(5.0)
-            timer <- new System.Threading.Timer((updatePosition >> Async.RunSynchronously), null, TimeSpan.Zero, timeBetweenPositionSaves)
+            updatePositionTimer <- new System.Threading.Timer((updatePosition >> Async.RunSynchronously), null, TimeSpan.Zero, timeBetweenPositionSaves)
             subscription <- client.subscribe (nullablePosition |> Nullable.toOption) x.EventAppeared (fun () -> log.Debug <| lazy("Live"))
             wakeupMonitor.Start() 
         with | e ->
@@ -199,12 +237,16 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
             raise ( new System.Exception("See inner exception",e)) // cannot use reraise in an async block
         }
 
+    /// Stop the system.
+    /// This will halt the processing of event handlers and wakeup handlers.
     member x.Stop () = 
         subscription.Stop()
         wakeupMonitor.Stop()
-        if timer <> null then
-            timer.Dispose()
+        if updatePositionTimer <> null then
+            updatePositionTimer.Dispose()
 
+    /// Process the event handlers for the given event.
+    /// NOTE: After the system has been started this will be called automatically for each event that appears in the $all stream.
     member x.EventAppeared eventId (event : ResolvedEvent) : Async<unit> =
         match handlers.EventStoreTypeToClassMap.ContainsKey event.Event.EventType with
         | true ->
@@ -246,13 +288,16 @@ type EventStoreSystem<'TCommandContext, 'TEventContext,'TMetadata, 'TBaseEvent w
                 completeTracker.Complete position
             }
 
+    /// Run the registered command handler for the given command.
     member x.RunCommand (context:'TCommandContext) (cmd : obj) = runCommand context cmd
 
-    member x.LastEventProcessed = lastEventProcessed
-
+    /// Get the mapping from event name to type
     member x.EventStoreTypeToClassMap = handlers.EventStoreTypeToClassMap
+
+    /// Get the mapping from event type to name
     member x.ClassToEventStoreTypeMap = handlers.ClassToEventStoreTypeMap
+
+    /// Get the system configuration
     member x.Handlers = handlers
 
-    interface IDisposable with
-        member x.Dispose () = x.Stop()
+    interface IDisposable with member x.Dispose () = x.Stop()
